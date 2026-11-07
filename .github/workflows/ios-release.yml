@@ -66,11 +66,11 @@ jobs:
           # archive 阶段不签名（CI 经典分法）：签名全部移到 export 步（ExportOptions method=app-store-connect 向云端要证书）
           # 此法绕开 xcodegen 工程签名设置与命令行参数的冲突（automatically signed for development vs Apple Distribution）
           xcodebuild archive \
-            -project CountdownDays.xcodeproj \
-            -scheme CountdownDays \
+            -project GroomerBook.xcodeproj \
+            -scheme GroomerBook \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$RUNNER_TEMP/CountdownDays.xcarchive" \
+            -archivePath "$RUNNER_TEMP/GroomerBook.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             DEVELOPMENT_TEAM="$DEV_TEAM_ID" \
@@ -85,7 +85,7 @@ jobs:
         run: |
           set -o pipefail
           xcodebuild -exportArchive \
-            -archivePath "$RUNNER_TEMP/CountdownDays.xcarchive" \
+            -archivePath "$RUNNER_TEMP/GroomerBook.xcarchive" \
             -exportOptionsPlist ExportOptions.plist \
             -exportPath "$RUNNER_TEMP/ipa" \
             -allowProvisioningUpdates \
@@ -99,7 +99,7 @@ jobs:
       - name: Upload IPA as artifact (always)
         uses: actions/upload-artifact@v4
         with:
-          name: CountdownDays-ipa
+          name: GroomerBook-ipa
           path: ${{ runner.temp }}/ipa/*.ipa
           if-no-files-found: error
 
