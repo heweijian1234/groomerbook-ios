@@ -28,6 +28,7 @@ targets:
           UIColorName: ""
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+        NSContactsUsageDescription: "仅当你主动从通讯录选择客户时读取姓名/电话/邮箱，用于快速填入客户资料。不做任何上传。"
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:
