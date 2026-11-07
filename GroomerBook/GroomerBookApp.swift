@@ -9,7 +9,7 @@ struct GroomerBookApp: App {
     }
 }
 
-// MARK: - 根视图（三Tab：Today / Dogs / Owners）
+// MARK: - 根视图（三Tab：今日 / 狗狗 / 主人）——中文 UI（2026-11-07 健哥令）
 
 struct RootView: View {
     @State private var data = Store.load()
@@ -20,13 +20,13 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             TodayView(data: $data)
-                .tabItem { Label("Today", systemImage: "calendar") }
+                .tabItem { Label("今日", systemImage: "calendar") }
                 .tag(0)
             DogListView(data: $data)
-                .tabItem { Label("Dogs", systemImage: "dog") }
+                .tabItem { Label("狗狗", systemImage: "dog") }
                 .tag(1)
             OwnerListView(data: $data)
-                .tabItem { Label("Owners", systemImage: "person.2") }
+                .tabItem { Label("主人", systemImage: "person.2") }
                 .tag(2)
         }
         .onAppear(perform: refresh)
@@ -64,9 +64,9 @@ struct TodayView: View {
                         Image(systemName: "scissors")
                             .font(.system(size: 52))
                             .foregroundColor(.orange)
-                        Text("Your mobile grooming book")
+                        Text("你的移动美容台账")
                             .font(.headline)
-                        Text("Add an owner, add their dog, then book the first appointment. Everything stays on this phone.")
+                        Text("先加主人，再加狗，然后约第一单。所有数据只留在这台手机上。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -76,12 +76,12 @@ struct TodayView: View {
                 } else {
                     List {
                         if !dueSoon.isEmpty {
-                            Section("Due for rebooking") {
+                            Section("该约了") {
                                 ForEach(dueSoon, id: \.0.id) { dog, days in
                                     HStack {
                                         VStack(alignment: .leading) {
                                             Text(dog.name).font(.headline)
-                                            Text("\(days) days since last groom")
+                                            Text("距上次美容 \(days) 天")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
@@ -100,14 +100,14 @@ struct TodayView: View {
                             }
                         }
                         if data.appointments.isEmpty {
-                            Text("No appointments yet — add one from a dog's profile.")
+                            Text("还没有预约——从狗狗档案页添加。")
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
             }
-            .navigationTitle("Today")
+            .navigationTitle("今日")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
@@ -121,7 +121,8 @@ struct TodayView: View {
 
     private var groupedByDay: [(String, [Appointment])] {
         let df = DateFormatter()
-        df.dateFormat = "EEE, MMM d"
+        df.dateFormat = "M月d日 EEEE"
+        df.locale = Locale(identifier: "zh_CN")
         let groups = Dictionary(grouping: data.appointments.filter { $0.status == .scheduled }.sorted { $0.date < $1.date }) {
             df.string(from: $0.date)
         }
@@ -146,33 +147,34 @@ struct AppointmentRow: View {
     var noShowWarn: String? {
         guard let dog else { return nil }
         let total = dog.noShowCount + (owner?.noShowCount ?? 0)
-        return total > 0 ? "\(total) no-show\(total > 1 ? "s" : "") on record — consider a deposit" : nil
+        return total > 0 ? "有 \(total) 次放鸽子记录——建议收押金" : nil
     }
 
     var tf: DateFormatter {
         let f = DateFormatter()
         f.timeStyle = .short
+        f.locale = Locale(identifier: "zh_CN")
         return f
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(dog?.name ?? "Unknown dog")
+                Text(dog?.name ?? "未知")
                     .font(.headline)
                 // 咬人风险标（P2）
                 if let dog {
                     Circle()
                         .fill(biteColor(dog.biteLevel))
                         .frame(width: 10, height: 10)
-                        .help(dog.biteLevel == 2 ? "Bite risk" : dog.biteLevel == 1 ? "Handle with care" : "")
+                        .help(dog.biteLevel == 2 ? "咬人风险" : dog.biteLevel == 1 ? "需谨慎" : "")
                 }
                 Spacer()
                 Text(tf.string(from: appt.date))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            Text("\(appt.groomMinutes) min groom · \(appt.driveBufferMinutes) min drive buffer")
+            Text("美容 \(appt.groomMinutes) 分钟 · 车程缓冲 \(appt.driveBufferMinutes) 分钟")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
@@ -186,7 +188,7 @@ struct AppointmentRow: View {
                 Button {
                     markDone()
                 } label: {
-                    Label("Done", systemImage: "checkmark.circle.fill")
+                    Label("完成", systemImage: "checkmark.circle.fill")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -194,7 +196,7 @@ struct AppointmentRow: View {
                 Button {
                     markNoShow()
                 } label: {
-                    Label("No-show", systemImage: "xmark.circle")
+                    Label("没来", systemImage: "xmark.circle")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -207,7 +209,7 @@ struct AppointmentRow: View {
                         copiedMsg = true
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedMsg = false }
                     } label: {
-                        Label(copiedMsg ? "Copied!" : "On-my-way text", systemImage: "message.fill")
+                        Label(copiedMsg ? "已复制！" : "在路上短信", systemImage: "message.fill")
                             .font(.caption)
                     }
                     .buttonStyle(.borderedProminent)
@@ -265,9 +267,9 @@ struct DogListView: View {
                         Image(systemName: "dog")
                             .font(.system(size: 52))
                             .foregroundColor(.orange)
-                        Text("No dogs yet")
+                        Text("还没有狗狗")
                             .font(.headline)
-                        Text("Add a dog with its grooming recipe, temperament and vaccine dates.")
+                        Text("添加狗狗：美容配方、脾气、疫苗日期。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -285,7 +287,7 @@ struct DogListView: View {
                     }
                 }
             }
-            .navigationTitle("Dogs")
+            .navigationTitle("狗狗")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
@@ -308,11 +310,11 @@ struct DogRow: View {
                 HStack(spacing: 6) {
                     Text(dog.name).font(.headline)
                     if dog.biteLevel == 2 {
-                        Label("BITE RISK", systemImage: "exclamationmark.triangle.fill")
+                        Label("咬人风险", systemImage: "exclamationmark.triangle.fill")
                             .font(.caption2)
                             .foregroundColor(.red)
                     } else if dog.biteLevel == 1 {
-                        Text("CARE")
+                        Text("谨慎")
                             .font(.caption2)
                             .foregroundColor(.orange)
                     }
@@ -325,7 +327,7 @@ struct DogRow: View {
             if let exp = dog.vaccineExpiry, exp < Date() {
                 Image(systemName: "syringe")
                     .foregroundColor(.red)
-                    .help("Vaccine expired")
+                    .help("疫苗已过期")
             }
         }
     }
@@ -348,9 +350,9 @@ struct DogDetailView: View {
     var body: some View {
         List {
             // 配方卡（P1）
-            Section("Grooming recipe") {
+            Section("美容配方") {
                 if current.groomRecipe.isEmpty {
-                    Text("Blade / shampoo / style notes — write once, reuse forever.")
+                    Text("刀头 / 洗毛精 / 造型备注——写一次，永久复用。")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 } else {
@@ -358,32 +360,32 @@ struct DogDetailView: View {
                 }
             }
             // 脾气+疫苗+no-show（P2/P6/P4）
-            Section("Health & behavior") {
+            Section("健康与脾气") {
                 if !current.temperament.isEmpty {
                     Label(current.temperament, systemImage: "heart")
                 }
                 HStack {
-                    Text("Bite risk")
+                    Text("咬人风险")
                     Spacer()
-                    Text(["Safe", "Care", "BITE RISK"][current.biteLevel])
+                    Text(["安全", "谨慎", "咬人风险"][current.biteLevel])
                         .foregroundColor(current.biteLevel == 2 ? .red : current.biteLevel == 1 ? .orange : .green)
                 }
                 if let exp = current.vaccineExpiry {
                     HStack {
-                        Label("Vaccine", systemImage: "syringe")
+                        Label("疫苗", systemImage: "syringe")
                         Spacer()
                         Text(exp, style: .date)
                             .foregroundColor(exp < Date() ? .red : .primary)
                     }
                 }
                 if current.noShowCount > 0 {
-                    Label("\(current.noShowCount) no-shows", systemImage: "exclamationmark.triangle")
+                    Label("放鸽子 \(current.noShowCount) 次", systemImage: "exclamationmark.triangle")
                         .foregroundColor(.orange)
                 }
             }
             // 主人联系（P3/健哥令①）
             if let owner {
-                Section("Owner") {
+                Section("主人") {
                     NavigationLink(destination: OwnerDetailView(owner: owner, data: $data)) {
                         VStack(alignment: .leading) {
                             Text(owner.name)
@@ -394,9 +396,9 @@ struct DogDetailView: View {
                 }
             }
             // 访问历史
-            Section("History") {
+            Section("历史") {
                 if history.isEmpty {
-                    Text("No visits yet").font(.footnote).foregroundColor(.secondary)
+                    Text("还没有上门记录").font(.footnote).foregroundColor(.secondary)
                 } else {
                     ForEach(history.prefix(10)) { appt in
                         HStack {
@@ -404,7 +406,7 @@ struct DogDetailView: View {
                                 .foregroundColor(appt.status == .noshow ? .red : .secondary)
                             Text(appt.date, style: .date)
                             Spacer()
-                            Text(appt.status.rawValue).font(.caption).foregroundColor(.secondary)
+                            Text(statusText(appt.status)).font(.caption).foregroundColor(.secondary)
                         }
                     }
                 }
@@ -414,8 +416,8 @@ struct DogDetailView: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    Button { showEdit = true } label: { Label("Edit", systemImage: "pencil") }
-                    Button { showBook = true } label: { Label("Book appointment", systemImage: "calendar.badge.plus") }
+                    Button { showEdit = true } label: { Label("编辑", systemImage: "pencil") }
+                    Button { showBook = true } label: { Label("约一单", systemImage: "calendar.badge.plus") }
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
@@ -425,6 +427,10 @@ struct DogDetailView: View {
         .sheet(isPresented: $showBook, onDismiss: { data = Store.load() }) {
             AppointmentEditor(data: $data, preselectedDogId: current.id)
         }
+    }
+
+    private func statusText(_ s: Appointment.Status) -> String {
+        switch s { case .done: return "完成"; case .noshow: return "没来"; default: return "已约" }
     }
 }
 
@@ -443,9 +449,9 @@ struct OwnerListView: View {
                         Image(systemName: "person.2")
                             .font(.system(size: 52))
                             .foregroundColor(.orange)
-                        Text("No owners yet")
+                        Text("还没有主人")
                             .font(.headline)
-                        Text("Owners hold contact info, preferences and no-show records.")
+                        Text("主人档案：联系方式、偏好、放鸽子记录。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -460,13 +466,13 @@ struct OwnerListView: View {
                                     HStack {
                                         Text(owner.name).font(.headline)
                                         if owner.noShowCount > 0 {
-                                            Text("\(owner.noShowCount) no-shows")
+                                            Text("放鸽子 \(owner.noShowCount) 次")
                                                 .font(.caption2)
                                                 .foregroundColor(.orange)
                                         }
                                     }
                                     let dogs = data.dogs.filter { $0.ownerId == owner.id }
-                                    Text(dogs.isEmpty ? "no dogs" : dogs.map { $0.name }.joined(separator: ", "))
+                                    Text(dogs.isEmpty ? "暂无狗狗" : dogs.map { $0.name }.joined(separator: "、"))
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -476,7 +482,7 @@ struct OwnerListView: View {
                     }
                 }
             }
-            .navigationTitle("Owners")
+            .navigationTitle("主人")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
@@ -501,7 +507,7 @@ struct OwnerDetailView: View {
 
     var body: some View {
         List {
-            Section("Contact") {
+            Section("联系方式") {
                 if !current.phone.isEmpty {
                     Link(destination: URL(string: "tel://\(current.phone.filter { !$0.isWhitespace })")!) {
                         Label(current.phone, systemImage: "phone")
@@ -513,25 +519,25 @@ struct OwnerDetailView: View {
                     }
                 }
                 if current.phone.isEmpty && current.email.isEmpty {
-                    Text("No contact info — tap Edit to add phone & email.")
+                    Text("还没有联系方式——点右上角编辑补充电话和邮箱。")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
             }
             if !current.notes.isEmpty {
-                Section("Preferences & notes") {
+                Section("偏好与备注") {
                     Text(current.notes)
                 }
             }
             if current.noShowCount > 0 {
                 Section {
-                    Label("\(current.noShowCount) no-shows on record", systemImage: "exclamationmark.triangle")
+                    Label("放鸽子 \(current.noShowCount) 次", systemImage: "exclamationmark.triangle")
                         .foregroundColor(.orange)
                 }
             }
-            Section("Dogs") {
+            Section("狗狗") {
                 if myDogs.isEmpty {
-                    Text("No dogs yet").font(.footnote).foregroundColor(.secondary)
+                    Text("暂无狗狗").font(.footnote).foregroundColor(.secondary)
                 } else {
                     ForEach(myDogs) { dog in
                         NavigationLink(destination: DogDetailView(dog: dog, data: $data)) {

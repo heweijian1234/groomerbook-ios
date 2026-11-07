@@ -106,11 +106,11 @@ enum Store {
     }
 }
 
-// MARK: - 快捷短信模板（P5：on-my-way 四要素——身份/ETA/狗名/准备事项，<160字符）
+// MARK: - 快捷短信模板（P5：on-my-way 四要素——身份/ETA/狗名/准备事项）——中文版
 
 enum MessageTemplate {
-    /// 生成 on-my-way 短信文本（复制给用户自己粘贴到 iMessage/WhatsApp）
+    /// 生成 on-my-way 短信文本（复制给用户自己粘贴到微信/短信）
     static func onMyWay(owner: Owner, dog: Dog, minutes: Int) -> String {
-        "Hi \(owner.name), this is your groomer — on my way now for \(dog.name), about \(minutes) min out. Please have \(dog.name) ready and the gate accessible."
+        "\(owner.name)您好，我是您的宠物美容师——现在正在前往您家的路上，预计 \(minutes) 分钟后到，请把\(dog.name)准备好、门能开。"
     }
 }

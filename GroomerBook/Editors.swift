@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - 狗编辑器（新建/编辑）——配方P1/咬人风险P2/疫苗P6/体重档
+// MARK: - 狗编辑器（新建/编辑）——配方P1/咬人风险P2/疫苗P6/体重档——中文 UI
 
 struct DogEditor: View {
     @Binding var data: Store.Data
@@ -20,61 +20,61 @@ struct DogEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Dog") {
-                    TextField("Name", text: $name)
-                    TextField("Breed", text: $breed)
+                Section("狗狗") {
+                    TextField("名字", text: $name)
+                    TextField("品种", text: $breed)
                     HStack {
-                        Text("Weight")
+                        Text("体重")
                         Slider(value: $weight, in: 1...70, step: 1)
-                        Text("\(Int(weight)) kg").monospacedDigit().frame(width: 56)
+                        Text("\(Int(weight)) 公斤").monospacedDigit().frame(width: 64)
                     }
                     // 体重档对应的默认时长提示（施工单）
-                    Text("Default groom: \(defaultMinutes) min")
+                    Text("默认美容时长：\(defaultMinutes) 分钟")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
-                Section("Owner") {
+                Section("主人") {
                     if data.owners.isEmpty {
-                        Text("Add an owner first (Owners tab).")
+                        Text("请先在「主人」页添加主人。")
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
-                        Picker("Owner", selection: $ownerId) {
+                        Picker("主人", selection: $ownerId) {
                             ForEach(data.owners) { o in
                                 Text(o.name).tag(Optional(o.id))
                             }
                         }
                     }
                 }
-                Section("Behavior") {
-                    Picker("Bite risk", selection: $biteLevel) {
-                        Text("Safe").tag(0)
-                        Text("Care").tag(1)
-                        Text("BITE RISK").tag(2)
+                Section("脾气") {
+                    Picker("咬人风险", selection: $biteLevel) {
+                        Text("安全").tag(0)
+                        Text("谨慎").tag(1)
+                        Text("咬人").tag(2)
                     }
                     .pickerStyle(.segmented)
-                    TextField("Temperament notes (anxious, fine with cats…)", text: $temperament, axis: .vertical)
+                    TextField("脾气备注（紧张、怕猫…）", text: $temperament, axis: .vertical)
                         .lineLimit(2...4)
                 }
-                Section("Grooming recipe") {
-                    TextField("Blade / shampoo / style notes", text: $groomRecipe, axis: .vertical)
+                Section("美容配方") {
+                    TextField("刀头 / 洗毛精 / 造型备注", text: $groomRecipe, axis: .vertical)
                         .lineLimit(4...8)
                 }
-                Section("Vaccine") {
-                    Toggle("Track vaccine expiry", isOn: $hasVaccine)
+                Section("疫苗") {
+                    Toggle("记录疫苗到期", isOn: $hasVaccine)
                     if hasVaccine {
-                        DatePicker("Expires", selection: $vaccineExpiry, displayedComponents: .date)
+                        DatePicker("到期日", selection: $vaccineExpiry, displayedComponents: .date)
                     }
                 }
             }
-            .navigationTitle(existing == nil ? "New Dog" : "Edit Dog")
+            .navigationTitle(existing == nil ? "新建狗狗" : "编辑狗狗")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button("保存") { save() }
                         .disabled(name.isEmpty || ownerId == nil && !data.owners.isEmpty)
                 }
             }
@@ -120,7 +120,7 @@ struct DogEditor: View {
     }
 }
 
-// MARK: - 主人编辑器（联系方式+邮箱 健哥令① / 偏好禁忌 P3）
+// MARK: - 主人编辑器（联系方式+邮箱 健哥令① / 偏好禁忌 P3）——中文 UI
 
 struct OwnerEditor: View {
     @Binding var data: Store.Data
@@ -135,29 +135,29 @@ struct OwnerEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Owner") {
-                    TextField("Name", text: $name)
+                Section("主人") {
+                    TextField("姓名", text: $name)
                 }
-                Section("Contact") {
-                    TextField("Phone", text: $phone)
+                Section("联系方式") {
+                    TextField("电话", text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("Email", text: $email)
+                    TextField("邮箱", text: $email)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                 }
-                Section("Preferences & notes") {
-                    TextField("Personality, preferences, gate code, do-nots…", text: $notes, axis: .vertical)
+                Section("偏好与备注") {
+                    TextField("性格、偏好、门禁密码、禁忌…", text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                 }
             }
-            .navigationTitle(existing == nil ? "New Owner" : "Edit Owner")
+            .navigationTitle(existing == nil ? "新建主人" : "编辑主人")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button("保存") { save() }
                         .disabled(name.isEmpty)
                 }
             }
@@ -184,7 +184,7 @@ struct OwnerEditor: View {
     }
 }
 
-// MARK: - 预约编辑器（建预约时 no-show 警示 P4 + 默认时长按体重档）
+// MARK: - 预约编辑器（建预约时 no-show 警示 P4 + 默认时长按体重档）——中文 UI
 
 struct AppointmentEditor: View {
     @Binding var data: Store.Data
@@ -205,7 +205,7 @@ struct AppointmentEditor: View {
     var noShowWarn: String? {
         guard let d = selectedDog else { return nil }
         let total = d.noShowCount + (selectedOwner?.noShowCount ?? 0)
-        return total > 0 ? "⚠️ \(total) no-show\(total > 1 ? "s" : "") on record — consider a deposit" : nil
+        return total > 0 ? "有 \(total) 次放鸽子记录——建议收押金" : nil
     }
 
     var body: some View {
@@ -213,11 +213,11 @@ struct AppointmentEditor: View {
             Form {
                 Section {
                     if data.dogs.isEmpty {
-                        Text("Add a dog first (Dogs tab).")
+                        Text("请先在「狗狗」页添加狗狗。")
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
-                        Picker("Dog", selection: $dogId) {
+                        Picker("狗狗", selection: $dogId) {
                             ForEach(data.dogs) { d in
                                 Text(d.name).tag(Optional(d.id))
                             }
@@ -236,24 +236,24 @@ struct AppointmentEditor: View {
                             .foregroundColor(.orange)
                     }
                 }
-                Section("When") {
-                    DatePicker("Date & time", selection: $date)
-                    Stepper("\(minutes) min groom", value: $minutes, in: 15...300, step: 15)
-                    Stepper("\(buffer) min drive buffer", value: $buffer, in: 0...60, step: 5)
+                Section("时间") {
+                    DatePicker("日期时间", selection: $date)
+                    Stepper("美容 \(minutes) 分钟", value: $minutes, in: 15...300, step: 15)
+                    Stepper("车程缓冲 \(buffer) 分钟", value: $buffer, in: 0...60, step: 5)
                 }
-                Section("Note") {
-                    TextField("Optional note", text: $note, axis: .vertical)
+                Section("备注") {
+                    TextField("选填备注", text: $note, axis: .vertical)
                         .lineLimit(2...4)
                 }
             }
-            .navigationTitle("New Appointment")
+            .navigationTitle("新建预约")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("取消") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button("保存") { save() }
                         .disabled(dogId == nil)
                 }
             }
