@@ -222,7 +222,7 @@ struct AppointmentEditor: View {
                                 Text(d.name).tag(Optional(d.id))
                             }
                         }
-                        .onChange(of: dogId) { _, nv in
+                        .onChange(of: dogId) { nv in
                             if let d = data.dogs.first(where: { $0.id == nv }) {
                                 minutes = d.defaultMinutes
                             }
