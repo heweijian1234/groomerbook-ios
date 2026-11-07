@@ -121,7 +121,7 @@ struct ContactPicker: UIViewControllerRepresentable {
         func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
             let name = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
             let phone = contact.phoneNumbers.first?.value.stringValue ?? ""
-            let email = contact.emailAddresses.first?.value as String ?? ""
+            let email = contact.emailAddresses.first?.value as String? ?? ""
             onPick(ContactPickerResult(name: name, phone: phone, email: email))
         }
 
