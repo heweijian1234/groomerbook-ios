@@ -373,7 +373,7 @@ struct AppointmentEditor: View {
     @State private var date = Date()
     @State private var minutes = 90
     @State private var buffer = 15
-    @State private var remindMinutesBefore = 60
+    @State private var remindSelections: [Int] = [60]
     @State private var note = ""
 
     var ownerPets: [Pet] {
@@ -451,16 +451,31 @@ struct AppointmentEditor: View {
                     }
                     Stepper("车程缓冲 \(buffer) 分钟", value: $buffer, in: 0...60, step: 5)
                 }
-                // 健哥令⑩：闹钟
-                Section("提醒（闹钟）") {
-                    Picker("提前提醒我", selection: $remindMinutesBefore) {
-                        Text("不提醒").tag(0)
-                        Text("提前 15 分钟").tag(15)
-                        Text("提前 30 分钟").tag(30)
-                        Text("提前 1 小时").tag(60)
-                        Text("提前 2 小时").tag(120)
-                        Text("提前 1 天").tag(1440)
+                // 健哥令⑩-v2：最多三个闹钟，1/2/3/4/6/10小时可选
+                Section("提醒（闹钟，最多3个）") {
+                    ForEach(remindSelections.indices, id: \.self) { idx in
+                        Picker("闹钟 \(idx + 1)", selection: $remindSelections[idx]) {
+                            ForEach(Appointment.remindOptions, id: \.self) { mins in
+                                Text(label(mins)).tag(mins)
+                            }
+                        }
                     }
+                    if remindSelections.count < 3 {
+                        Button {
+                            remindSelections.append(120)
+                        } label: {
+                            Label("加一个闹钟", systemImage: "plus.circle")
+                        }
+                    }
+                    if !remindSelections.isEmpty {
+                        Button(role: .destructive) {
+                            remindSelections = []
+                        } label: {
+                            Label("全部清除", systemImage: "trash")
+                        }
+                    }
+                } footer: {
+                    Text("到点系统通知提醒你出发。最多设3个，如：提前2小时整理工具 + 提前1小时出发。")
                 }
                 Section("备注") {
                     TextField("备注（可选）", text: $note, axis: .vertical)
@@ -490,14 +505,18 @@ struct AppointmentEditor: View {
         }
     }
 
+    private func label(_ mins: Int) -> String {
+        mins >= 60 ? "提前 \(mins / 60) 小时" : "提前 \(mins) 分钟"
+    }
+
     private func save() {
         guard let oid = ownerId else { return }
         let appt = Appointment(ownerId: oid, petIds: Array(selectedPetIds), date: date,
                                groomMinutes: minutes, driveBufferMinutes: buffer,
-                               remindMinutesBefore: remindMinutesBefore, note: note)
+                               remindMinutesList: remindSelections, note: note)
         data.appointments.append(appt)
         Store.save(data)
-        // 闹钟（健哥令⑩）
+        // 闹钟（健哥令⑩-v2 多闹钟）
         let petNames = data.pets.filter { selectedPetIds.contains($0.id) }.map { $0.name }.joined(separator: "和")
         if let owner = data.owners.first(where: { $0.id == oid }) {
             ReminderScheduler.schedule(appointment: appt, ownerName: owner.name, petNames: petNames)

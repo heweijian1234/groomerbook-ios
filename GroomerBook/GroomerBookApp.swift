@@ -17,29 +17,41 @@ struct GroomerBookApp: App {
 // MARK: - 本地通知（健哥令⑩：预约闹钟）
 
 enum ReminderScheduler {
-    /// 预约前 X 分钟本地通知；status 变更时调 cancel
+    /// 预约闹钟（健哥令⑩-v2：最多3个提醒，[60,120,180]式分钟数组）
     static func schedule(appointment: Appointment, ownerName: String, petNames: String) {
         let center = UNUserNotificationCenter.current()
         // 先取消旧的
         cancel(appointmentId: appointment.id)
-        guard appointment.remindMinutesBefore > 0, appointment.status == .scheduled else { return }
+        guard appointment.status == .scheduled else { return }
 
-        let triggerDate = appointment.date.addingTimeInterval(-Double(appointment.remindMinutesBefore) * 60)
-        guard triggerDate > Date() else { return }
+        let hoursText = { (mins: Int) -> String in
+            mins >= 60 ? "提前 \(mins / 60) 小时" : "提前 \(mins) 分钟"
+        }
+        var idx = 0
+        for mins in appointment.remindMinutesList {
+            let triggerDate = appointment.date.addingTimeInterval(-Double(mins) * 60)
+            guard triggerDate > Date() else { continue }
 
-        let content = UNMutableNotificationContent()
-        content.title = "上门提醒"
-        content.body = "再过 \(appointment.remindMinutesBefore) 分钟出发去 \(ownerName) 家（\(petNames)）。\(appointment.remindMinutesBefore >= 60 ? "记得带齐工具。" : "")"
-        content.sound = .default
+            let content = UNMutableNotificationContent()
+            content.title = "上门提醒（\(hoursText(mins))）"
+            content.body = "\(hoursText(mins))出发去 \(ownerName) 家（\(petNames)）。\(mins >= 120 ? "记得带齐工具。" : "")"
+            content.sound = .default
 
-        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
-        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-        let request = UNNotificationRequest(identifier: appointment.id.uuidString, content: content, trigger: trigger)
-        center.add(request)
+            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
+            let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+            let request = UNNotificationRequest(identifier: "\(appointment.id.uuidString)-\(idx)", content: content, trigger: trigger)
+            center.add(request)
+            idx += 1
+        }
     }
 
     static func cancel(appointmentId: UUID) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [appointmentId.uuidString])
+        // 数组闹钟：清掉全部可能存在的带序号 identifier
+        let center = UNUserNotificationCenter.current()
+        center.getPendingNotificationRequests { pending in
+            let ids = pending.map { $0.identifier }.filter { $0.hasPrefix(appointmentId.uuidString) }
+            center.removePendingNotificationRequests(withIdentifiers: ids)
+        }
     }
 }
 
@@ -290,8 +302,11 @@ struct AppointmentRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            if appt.remindMinutesBefore > 0 {
-                Label("提前 \(appt.remindMinutesBefore >= 60 ? "\(appt.remindMinutesBefore / 60) 小时" : "\(appt.remindMinutesBefore) 分钟")提醒", systemImage: "bell.fill")
+            if !appt.remindMinutesList.isEmpty {
+                let labels = appt.remindMinutesList.sorted().map { mins in
+                    mins >= 60 ? "提前\(mins / 60)小时" : "提前\(mins)分钟"
+                }.joined(separator: "、")
+                Label(labels + "提醒", systemImage: "bell.fill")
                     .font(.caption)
                     .foregroundColor(.blue)
             }

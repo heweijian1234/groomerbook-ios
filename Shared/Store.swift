@@ -109,7 +109,7 @@ struct Appointment: Codable, Identifiable, Equatable {
     var date: Date
     var groomMinutes: Int         // 美容时长（健哥令③：可选，不叫"默认"）
     var driveBufferMinutes: Int
-    var remindMinutesBefore: Int  // 健哥令⑩：提前提醒（分钟；0=不提醒）
+    var remindMinutesList: [Int]  // 健哥令⑩-v2：闹钟可设最多3个（分钟数数组，如[60,1440]；空=不提醒）
     var status: Status
     var note: String
 
@@ -120,15 +120,18 @@ struct Appointment: Codable, Identifiable, Equatable {
         case canceled = "已取消"
     }
 
+    /// 候选提醒时长（健哥令⑩-v2：1/2/3/4/6/10小时）
+    static let remindOptions: [Int] = [60, 120, 180, 240, 360, 600]
+
     init(id: UUID = UUID(), ownerId: UUID, petIds: [UUID] = [], date: Date, groomMinutes: Int,
-         driveBufferMinutes: Int = 15, remindMinutesBefore: Int = 60, status: Status = .scheduled, note: String = "") {
+         driveBufferMinutes: Int = 15, remindMinutesList: [Int] = [60], status: Status = .scheduled, note: String = "") {
         self.id = id
         self.ownerId = ownerId
         self.petIds = petIds
         self.date = date
         self.groomMinutes = groomMinutes
         self.driveBufferMinutes = driveBufferMinutes
-        self.remindMinutesBefore = remindMinutesBefore
+        self.remindMinutesList = Array(remindMinutesList.prefix(3))   // 最多3个
         self.status = status
         self.note = note
     }
@@ -167,7 +170,7 @@ enum Store {
             let ownerId = old.pets.first(where: { $0.id == ap.petId })?.ownerId ?? UUID()
             return Appointment(id: ap.id, ownerId: ownerId, petIds: [ap.petId], date: ap.date,
                                groomMinutes: ap.groomMinutes, driveBufferMinutes: ap.driveBufferMinutes,
-                               remindMinutesBefore: 60, status: ap.status, note: ap.note)
+                               remindMinutesList: [60], status: ap.status, note: ap.note)
         }
         if let raw2 = try? JSONEncoder().encode(d) {
             UserDefaults.standard.set(raw2, forKey: key)
