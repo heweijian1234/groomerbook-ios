@@ -452,7 +452,7 @@ struct AppointmentEditor: View {
                     Stepper("车程缓冲 \(buffer) 分钟", value: $buffer, in: 0...60, step: 5)
                 }
                 // 健哥令⑩-v2：最多三个闹钟，1/2/3/4/6/10小时可选
-                Section("提醒（闹钟，最多3个）") {
+                Section {
                     ForEach(remindSelections.indices, id: \.self) { idx in
                         Picker("闹钟 \(idx + 1)", selection: $remindSelections[idx]) {
                             ForEach(Appointment.remindOptions, id: \.self) { mins in
@@ -474,6 +474,8 @@ struct AppointmentEditor: View {
                             Label("全部清除", systemImage: "trash")
                         }
                     }
+                } header: {
+                    Text("提醒（闹钟，最多3个）")
                 } footer: {
                     Text("到点系统通知提醒你出发。最多设3个，如：提前2小时整理工具 + 提前1小时出发。")
                 }
@@ -514,6 +516,7 @@ struct AppointmentEditor: View {
         let appt = Appointment(ownerId: oid, petIds: Array(selectedPetIds), date: date,
                                groomMinutes: minutes, driveBufferMinutes: buffer,
                                remindMinutesList: remindSelections, note: note)
+
         data.appointments.append(appt)
         Store.save(data)
         // 闹钟（健哥令⑩-v2 多闹钟）
