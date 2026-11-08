@@ -1,7 +1,8 @@
 import SwiftUI
 import ContactsUI
+import PhotosUI
 
-// MARK: - 客户编辑器 v2（健哥令⑥：地址/家人/通讯录选人；②：客户为主实体）
+// MARK: - 客户编辑器 v3（健哥第二轮⑦：新建客户时下方顺便录宠物；①删门禁密码示例）
 
 struct ClientEditor: View {
     @Binding var data: Store.Data
@@ -15,6 +16,18 @@ struct ClientEditor: View {
     @State private var familyMembers = ""
     @State private var notes = ""
     @State private var showContactPicker = false
+
+    // 内嵌宠物录入（健哥令⑦：新建客户页下方顺便加宠物）
+    @State private var pendingPets: [PendingPet] = []
+
+    struct PendingPet: Identifiable {
+        let id = UUID()
+        var name = ""
+        var type: PetType = .dog
+        var breed = ""
+        var weight = 10.0
+        var groomRecipe = ""
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,12 +52,39 @@ struct ClientEditor: View {
                         .lineLimit(2...3)
                 }
                 Section("家人") {
-                    TextField("家里谁对接？（如：老婆王芳收狗/儿子负责开门）", text: $familyMembers, axis: .vertical)
+                    TextField("家里谁对接？（如：老婆王芳负责收狗/儿子开门）", text: $familyMembers, axis: .vertical)
                         .lineLimit(2...3)
                 }
                 Section("偏好与备注") {
-                    TextField("性格、偏好、门禁密码、禁忌…", text: $notes, axis: .vertical)
+                    TextField("性格、偏好、注意事项…", text: $notes, axis: .vertical)
                         .lineLimit(3...6)
+                }
+                // 内嵌宠物（健哥令⑦）
+                Section("宠物（可顺便录入，也可以后再加）") {
+                    ForEach($pendingPets) { $pet in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                TextField("宠物名字", text: $pet.name)
+                                Picker("", selection: $pet.type) {
+                                    ForEach(PetType.allCases, id: \.self) { t in
+                                        Text("\(t.emoji) \(t.rawValue)").tag(t)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 110)
+                            }
+                            TextField("品种", text: $pet.breed)
+                            TextField("美容配方（造型/洗毛精…）", text: $pet.groomRecipe, axis: .vertical)
+                                .lineLimit(2...4)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    .onDelete { pendingPets.remove(atOffsets: $0) }
+                    Button {
+                        pendingPets.append(PendingPet())
+                    } label: {
+                        Label("加一只宠物", systemImage: "plus.circle")
+                    }
                 }
             }
             .navigationTitle(existing == nil ? "新建客户" : "编辑客户")
@@ -73,27 +113,37 @@ struct ClientEditor: View {
 
     private func load() {
         guard let o = existing else { return }
-        name = o.name; phone = o.phone; email = o.email
+        name = o.name; phone = o.phone; email = email(o)
         address = o.address; familyMembers = o.familyMembers; notes = o.notes
     }
+    private func email(_ o: Owner) -> String { o.email }
 
     private func save() {
+        var savedOwner: Owner
         if var o = existing {
             if let i = data.owners.firstIndex(where: { $0.id == o.id }) {
-                o.name = name; o.phone = phone; o.email = email
+                o.name = name; o.phone = phone; o.email = self.email(o)
                 o.address = address; o.familyMembers = familyMembers; o.notes = notes
                 data.owners[i] = o
-            }
+                savedOwner = o
+            } else { return }
         } else {
-            data.owners.append(Owner(name: name, phone: phone, email: email, address: address,
-                                     familyMembers: familyMembers, notes: notes))
+            let o = Owner(name: name, phone: phone, email: email, address: address,
+                          familyMembers: familyMembers, notes: notes)
+            data.owners.append(o)
+            savedOwner = o
+        }
+        // 内嵌宠物落库
+        for pp in pendingPets where !pp.name.isEmpty {
+            data.pets.append(Pet(name: pp.name, type: pp.type, breed: pp.breed, weightKg: pp.weight,
+                                 ownerId: savedOwner.id, groomRecipe: pp.groomRecipe))
         }
         Store.save(data)
         dismiss()
     }
 }
 
-// MARK: - 通讯录选择器（健哥令⑥：电话能从手机通讯录选）
+// MARK: - 通讯录选择器
 
 struct ContactPickerResult {
     var name: String
@@ -121,7 +171,7 @@ struct ContactPicker: UIViewControllerRepresentable {
         func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
             let name = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
             let phone = contact.phoneNumbers.first?.value.stringValue ?? ""
-            let email = contact.emailAddresses.first?.value as String? ?? ""
+            let email = (contact.emailAddresses.first?.value as String?) ?? ""
             onPick(ContactPickerResult(name: name, phone: phone, email: email))
         }
 
@@ -131,7 +181,7 @@ struct ContactPicker: UIViewControllerRepresentable {
     }
 }
 
-// MARK: - 宠物编辑器 v2（健哥令⑦：宠物类型可选/自填；⑧特殊工具；②挂客户）
+// MARK: - 宠物编辑器 v3（④兔鸟→马 ③时长可选 ⑦喜好+状态 ⑨图片）
 
 struct PetEditor: View {
     @Binding var data: Store.Data
@@ -149,15 +199,55 @@ struct PetEditor: View {
     @State private var biteLevel = 0
     @State private var groomRecipe = ""
     @State private var specialTools = ""
+    @State private var favoriteFood = ""
+    @State private var favoritePetting = ""
+    @State private var status: PetStatus = .normal
+    @State private var photoData: Data?
+    @State private var photoItem: PhotosPickerItem?
     @State private var hasVaccine = false
     @State private var vaccineExpiry = Date()
 
     var body: some View {
         NavigationStack {
             Form {
+                // 图片（健哥令⑨）
+                Section("照片") {
+                    HStack {
+                        if let d = photoData, let ui = UIImage(data: d) {
+                            Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 80, height: 80)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                            Button {
+                                photoData = nil; photoItem = nil
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                        } else {
+                            PhotosPicker(selection: $photoItem, matching: .images) {
+                                Label("选照片", systemImage: "photo.badge.plus")
+                            }
+                        }
+                    }
+                    .onChange(of: photoItem) { item in
+                        guard let item else { return }
+                        Task {
+                            if let data = try? await item.loadTransferable(type: Data.self) {
+                                // 压缩到合理尺寸（避免 UserDefaults 爆炸）
+                                if let img = UIImage(data: data),
+                                   let resized = img.resized(maxSide: 600),
+                                   let jpeg = resized.jpegData(compressionQuality: 0.7) {
+                                    photoData = jpeg
+                                }
+                            }
+                            photoItem = nil
+                        }
+                    }
+                }
                 Section("宠物") {
                     TextField("名字", text: $name)
-                    // 宠物类型（健哥令⑦：不止狗——可选或自填）
                     Picker("类型", selection: $type) {
                         ForEach(PetType.allCases, id: \.self) { t in
                             Text("\(t.emoji) \(t.rawValue)").tag(t)
@@ -167,14 +257,6 @@ struct PetEditor: View {
                         TextField("填类型（如：刺猬/龙猫/猪）", text: $customType)
                     }
                     TextField("品种", text: $breed)
-                    HStack {
-                        Text("体重")
-                        Slider(value: $weight, in: 1...70, step: 1)
-                        Text("\(Int(weight)) 公斤").monospacedDigit().frame(width: 64)
-                    }
-                    Text("默认美容时长：\(defaultMinutes) 分钟")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
                 Section("主人") {
                     if data.owners.isEmpty {
@@ -189,6 +271,11 @@ struct PetEditor: View {
                         }
                     }
                 }
+                // 健好令⑦：喜好
+                Section("喜好（沟通时讨好它用）") {
+                    TextField("喜欢吃什么？（鸡肉冻干/小鱼干…）", text: $favoriteFood)
+                    TextField("喜欢怎么摸它？（摸下巴/揉耳朵根…）", text: $favoritePetting)
+                }
                 Section("脾气") {
                     Picker("咬人风险", selection: $biteLevel) {
                         Text("安全").tag(0)
@@ -196,16 +283,23 @@ struct PetEditor: View {
                         Text("咬人").tag(2)
                     }
                     .pickerStyle(.segmented)
-                    TextField("脾气备注（紧张、怕猫…）", text: $temperament, axis: .vertical)
+                    TextField("脾气备注（胆小/认生/需要先遛…）", text: $temperament, axis: .vertical)
                         .lineLimit(2...4)
+                }
+                // 健哥令⑦：状态标记
+                Section("状态") {
+                    Picker("当前状态", selection: $status) {
+                        ForEach(PetStatus.allCases, id: \.self) { s in
+                            Text(s.rawValue).tag(s)
+                        }
+                    }
                 }
                 Section("美容配方") {
                     TextField("造型 / 刀头 / 洗毛精备注", text: $groomRecipe, axis: .vertical)
                         .lineLimit(4...8)
                 }
-                // 特殊工具（健哥令⑧：避免忘带）
                 Section("特殊工具携带") {
-                    TextField("上门要特别带的工具？（大型犬吹水机/猫嘴套/电剪备用电池…）", text: $specialTools, axis: .vertical)
+                    TextField("上门要特别带的工具？（大型犬吹水机/猫嘴套…）", text: $specialTools, axis: .vertical)
                         .lineLimit(2...4)
                 }
                 Section("疫苗") {
@@ -230,17 +324,6 @@ struct PetEditor: View {
         }
     }
 
-    private var defaultMinutes: Int {
-        let base: Int
-        switch weight {
-        case ..<8: base = 60
-        case ..<20: base = 90
-        case ..<35: base = 120
-        default: base = 150
-        }
-        return type == .cat ? max(45, base - 15) : base
-    }
-
     private func load() {
         guard let p = existing else {
             ownerId = presetOwnerId ?? data.owners.first?.id
@@ -249,86 +332,135 @@ struct PetEditor: View {
         name = p.name; type = p.type; breed = p.breed; weight = p.weightKg; ownerId = p.ownerId
         temperament = p.temperament; biteLevel = p.biteLevel; groomRecipe = p.groomRecipe
         specialTools = p.specialTools
+        favoriteFood = p.favoriteFood; favoritePetting = p.favoritePetting
+        status = p.status; photoData = p.photoData
         if let v = p.vaccineExpiry { hasVaccine = true; vaccineExpiry = v }
     }
 
     private func save() {
         guard let oid = ownerId else { return }
-        let finalType: PetType = type
         if var p = existing {
             if let i = data.pets.firstIndex(where: { $0.id == p.id }) {
-                p.name = name; p.type = finalType; p.breed = breed; p.weightKg = weight; p.ownerId = oid
+                p.name = name; p.type = type; p.breed = breed; p.weightKg = weight; p.ownerId = oid
                 p.temperament = temperament; p.biteLevel = biteLevel; p.groomRecipe = groomRecipe
                 p.specialTools = specialTools
+                p.favoriteFood = favoriteFood; p.favoritePetting = favoritePetting
+                p.status = status; p.photoData = photoData
                 p.vaccineExpiry = hasVaccine ? vaccineExpiry : nil
                 data.pets[i] = p
             }
         } else {
-            data.pets.append(Pet(name: name, type: finalType, breed: breed, weightKg: weight, ownerId: oid,
+            data.pets.append(Pet(name: name, type: type, breed: breed, weightKg: weight, ownerId: oid,
                                  temperament: temperament, biteLevel: biteLevel, groomRecipe: groomRecipe,
-                                 specialTools: specialTools, vaccineExpiry: hasVaccine ? vaccineExpiry : nil))
+                                 specialTools: specialTools, favoriteFood: favoriteFood,
+                                 favoritePetting: favoritePetting, status: status, photoData: photoData,
+                                 vaccineExpiry: hasVaccine ? vaccineExpiry : nil))
         }
         Store.save(data)
         dismiss()
     }
 }
 
-// MARK: - 预约编辑器（没成功警示 + 默认时长按体重/类型）
+// MARK: - 预约编辑器 v3（⑥挂主人选宠物；③时长可选；⑩闹钟）
 
 struct AppointmentEditor: View {
     @Binding var data: Store.Data
-    let preselectedPetId: UUID?
+    let preselectedOwnerId: UUID?
     @Environment(\.dismiss) private var dismiss
 
-    @State private var petId: UUID?
+    @State private var ownerId: UUID?
+    @State private var selectedPetIds: Set<UUID> = []
     @State private var date = Date()
     @State private var minutes = 90
     @State private var buffer = 15
+    @State private var remindMinutesBefore = 60
     @State private var note = ""
 
-    var selectedPet: Pet? { data.pets.first { $0.id == petId } }
-    var selectedOwner: Owner? {
-        guard let p = selectedPet else { return nil }
-        return data.owners.first { $0.id == p.ownerId }
-    }
-    var noShowWarn: String? {
-        guard let p = selectedPet else { return nil }
-        let total = p.noShowCount + (selectedOwner?.noShowCount ?? 0)
-        return total > 0 ? "⚠️ 有 \(total) 次没成功记录——建议收押金" : nil
+    var ownerPets: [Pet] {
+        guard let oid = ownerId else { return [] }
+        return data.pets.filter { $0.ownerId == oid }
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    if data.pets.isEmpty {
-                        Text("请先添加宠物。")
+                Section("客户（预约对象是人）") {
+                    if data.owners.isEmpty {
+                        Text("请先在「客户」页添加客户。")
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
-                        Picker("宠物", selection: $petId) {
-                            ForEach(data.pets) { p in
-                                Text("\(p.type.emoji) \(p.name)").tag(Optional(p.id))
+                        Picker("客户", selection: $ownerId) {
+                            ForEach(data.owners) { o in
+                                Text(o.name).tag(Optional(o.id))
                             }
                         }
-                        .onChange(of: petId) { nv in
-                            if let p = data.pets.first(where: { $0.id == nv }) {
-                                minutes = p.defaultMinutes
+                        .onChange(of: ownerId) { nv in
+                            // 换客户时清空已选宠物
+                            selectedPetIds = []
+                            if let p = ownerPets.first { minutes = p.defaultMinutes }
+                        }
+                    }
+                }
+                Section("这次服务哪些宠物（可多选）") {
+                    if ownerPets.isEmpty {
+                        Text("该客户还没有宠物——可在客户详情里加。")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    } else {
+                        ForEach(ownerPets) { p in
+                            Button {
+                                if selectedPetIds.contains(p.id) {
+                                    selectedPetIds.remove(p.id)
+                                } else {
+                                    selectedPetIds.insert(p.id)
+                                }
+                            } label: {
+                                HStack {
+                                    Text("\(p.type.emoji) \(p.name)")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if selectedPetIds.contains(p.id) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.orange)
+                                    }
+                                }
                             }
                         }
                     }
                 }
-                if let warn = noShowWarn {
+                if let oid = ownerId, let owner = data.owners.first(where: { $0.id == oid }),
+                   owner.noShowCount > 0 || ownerPets.reduce(0, { $0 + $1.noShowCount }) > 0 {
                     Section {
-                        Label(warn, systemImage: "exclamationmark.triangle.fill")
+                        Label("有 \(owner.noShowCount + ownerPets.reduce(0) { $0 + $1.noShowCount }) 次没成功记录——建议收押金",
+                              systemImage: "exclamationmark.triangle.fill")
                             .font(.footnote)
                             .foregroundColor(.orange)
                     }
                 }
-                Section("时间") {
+                Section("时间与时长") {
                     DatePicker("日期与时间", selection: $date)
-                    Stepper("\(minutes) 分钟美容", value: $minutes, in: 15...300, step: 15)
-                    Stepper("\(buffer) 分钟车程缓冲", value: $buffer, in: 0...60, step: 5)
+                    // 健哥令③：美容时长可选（不叫"默认"）
+                    Picker("美容时长", selection: $minutes) {
+                        Text("45 分钟").tag(45)
+                        Text("60 分钟").tag(60)
+                        Text("90 分钟").tag(90)
+                        Text("120 分钟").tag(120)
+                        Text("150 分钟").tag(150)
+                        Text("180 分钟").tag(180)
+                    }
+                    Stepper("车程缓冲 \(buffer) 分钟", value: $buffer, in: 0...60, step: 5)
+                }
+                // 健哥令⑩：闹钟
+                Section("提醒（闹钟）") {
+                    Picker("提前提醒我", selection: $remindMinutesBefore) {
+                        Text("不提醒").tag(0)
+                        Text("提前 15 分钟").tag(15)
+                        Text("提前 30 分钟").tag(30)
+                        Text("提前 1 小时").tag(60)
+                        Text("提前 2 小时").tag(120)
+                        Text("提前 1 天").tag(1440)
+                    }
                 }
                 Section("备注") {
                     TextField("备注（可选）", text: $note, axis: .vertical)
@@ -343,27 +475,38 @@ struct AppointmentEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") { save() }
-                        .disabled(petId == nil)
+                        .disabled(ownerId == nil)
                 }
             }
             .onAppear {
-                if petId == nil {
-                    petId = preselectedPetId ?? data.pets.first?.id
-                    if let p = selectedPet { minutes = p.defaultMinutes }
+                if ownerId == nil {
+                    ownerId = preselectedOwnerId ?? data.owners.first?.id
+                    if let p = ownerPets.first {
+                        minutes = p.defaultMinutes
+                        selectedPetIds = [p.id]
+                    }
                 }
             }
         }
     }
 
     private func save() {
-        guard let pid = petId else { return }
-        data.appointments.append(Appointment(petId: pid, date: date, groomMinutes: minutes, driveBufferMinutes: buffer, note: note))
+        guard let oid = ownerId else { return }
+        let appt = Appointment(ownerId: oid, petIds: Array(selectedPetIds), date: date,
+                               groomMinutes: minutes, driveBufferMinutes: buffer,
+                               remindMinutesBefore: remindMinutesBefore, note: note)
+        data.appointments.append(appt)
         Store.save(data)
+        // 闹钟（健哥令⑩）
+        let petNames = data.pets.filter { selectedPetIds.contains($0.id) }.map { $0.name }.joined(separator: "和")
+        if let owner = data.owners.first(where: { $0.id == oid }) {
+            ReminderScheduler.schedule(appointment: appt, ownerName: owner.name, petNames: petNames)
+        }
         dismiss()
     }
 }
 
-// MARK: - 我的/反馈页（健哥令⑤：用户反馈收集）
+// MARK: - 反馈页 v3（健哥令⑤：加返回键/导航结构修正）
 
 struct FeedbackView: View {
     @State private var feedbackText = ""
@@ -378,7 +521,7 @@ struct FeedbackView: View {
                         .overlay(
                             Group {
                                 if feedbackText.isEmpty {
-                                    Text("用着哪里不顺？缺什么功能？想到什么说什么——直接写。")
+                                    Text("用着哪里不顺？缺什么功能？直接写。")
                                         .foregroundColor(.secondary)
                                         .font(.footnote)
                                         .padding(.top, 8)
@@ -390,7 +533,6 @@ struct FeedbackView: View {
                 }
                 Section {
                     Button {
-                        // 邮件反馈：mailto 带正文（用户自己的邮件 App 发出——无服务器、无埋点，纯本地 App 的反馈通道）
                         let subject = "宠物美容台账-用户反馈"
                         let body = feedbackText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                         if let url = URL(string: "mailto:zeronelabs.dev@gmail.com?subject=\(subject)&body=\(body)") {
@@ -406,6 +548,22 @@ struct FeedbackView: View {
                 }
             }
             .navigationTitle("我的")
+            .navigationBarTitleDisplayMode(.inline)
         }
+    }
+}
+
+// MARK: - 图片缩放工具
+
+extension UIImage {
+    func resized(maxSide: CGFloat) -> UIImage? {
+        let scale = maxSide / max(size.width, size.height)
+        if scale >= 1 { return self }
+        let newSize = CGSize(width: size.width * scale, height: size.height * scale)
+        UIGraphicsBeginImageContextWithOptions(newSize, false, 1)
+        draw(in: CGRect(origin: .zero, size: newSize))
+        let result = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        return result
     }
 }

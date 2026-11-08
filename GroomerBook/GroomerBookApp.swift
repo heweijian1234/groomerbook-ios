@@ -1,15 +1,49 @@
 import SwiftUI
+import UserNotifications
 
 @main
 struct GroomerBookApp: App {
     var body: some Scene {
         WindowGroup {
             RootView()
+                .onAppear {
+                    // 健哥令⑩：闹钟提醒——申请通知权限
+                    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+                }
         }
     }
 }
 
-// MARK: - 根视图 v2（健哥令②以人为主：今日/客户（主人在上） /宠物（挂客户下） /我的）
+// MARK: - 本地通知（健哥令⑩：预约闹钟）
+
+enum ReminderScheduler {
+    /// 预约前 X 分钟本地通知；status 变更时调 cancel
+    static func schedule(appointment: Appointment, ownerName: String, petNames: String) {
+        let center = UNUserNotificationCenter.current()
+        // 先取消旧的
+        cancel(appointmentId: appointment.id)
+        guard appointment.remindMinutesBefore > 0, appointment.status == .scheduled else { return }
+
+        let triggerDate = appointment.date.addingTimeInterval(-Double(appointment.remindMinutesBefore) * 60)
+        guard triggerDate > Date() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "上门提醒"
+        content.body = "再过 \(appointment.remindMinutesBefore) 分钟出发去 \(ownerName) 家（\(petNames)）。\(appointment.remindMinutesBefore >= 60 ? "记得带齐工具。" : "")"
+        content.sound = .default
+
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        let request = UNNotificationRequest(identifier: appointment.id.uuidString, content: content, trigger: trigger)
+        center.add(request)
+    }
+
+    static func cancel(appointmentId: UUID) {
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [appointmentId.uuidString])
+    }
+}
+
+// MARK: - 根视图 v3（今日/客户/宠物/我的）
 
 struct RootView: View {
     @State private var data = Store.load()
@@ -34,21 +68,21 @@ struct RootView: View {
     }
 }
 
-// MARK: - Tab1 今日（首页：地址+电话直显/一键拨号/导航 N5 + 该约了 + 预约列表）
+// MARK: - Tab1 今日
 
 struct TodayView: View {
     @Binding var data: Store.Data
     @State private var showAdd = false
 
-    /// 该约了：上次完成≥35天且无未完成的预约
+    /// 该约了
     var dueSoon: [(Pet, Int)] {
         let today = Calendar.current.startOfDay(for: Date())
         var result: [(Pet, Int)] = []
-        for pet in data.pets {
+        for pet in data.pets where pet.status == .normal {
             let doneDays = data.appointments
-                .filter { $0.petId == pet.id && $0.status == .done }
+                .filter { $0.ownerId == pet.ownerId && $0.status == .done }
                 .compactMap { Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: $0.date), to: today).day }
-            let hasOpen = data.appointments.contains { $0.petId == pet.id && $0.status == .scheduled }
+            let hasOpen = data.appointments.contains { $0.ownerId == pet.ownerId && $0.status == .scheduled }
             if let last = doneDays.min(), last >= Appointment.reorderDays - 7, !hasOpen {
                 result.append((pet, last))
             }
@@ -67,7 +101,7 @@ struct TodayView: View {
                             .foregroundColor(.orange)
                         Text("你的移动美容台账")
                             .font(.headline)
-                        Text("先加客户，再加宠物，然后约第一单。所有数据只留在这台手机上。")
+                        Text("先加客户（含宠物），然后约第一单。所有数据只留在这台手机上。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -76,11 +110,9 @@ struct TodayView: View {
                     }
                 } else {
                     List {
-                        // 今日上门卡（健哥令⑥：地址+电话直显在首页）
                         ForEach(todayAppointments) { appt in
-                            if let pet = data.pets.first(where: { $0.id == appt.petId }),
-                               let owner = data.owners.first(where: { $0.id == pet.ownerId }) {
-                                TodayVisitCard(appt: appt, pet: pet, owner: owner)
+                            if let owner = data.owners.first(where: { $0.id == appt.ownerId }) {
+                                TodayVisitCard(appt: appt, owner: owner, data: $data)
                             }
                         }
                         if !dueSoon.isEmpty {
@@ -107,8 +139,8 @@ struct TodayView: View {
                                 }
                             }
                         }
-                        if data.appointments.isEmpty && !data.pets.isEmpty {
-                            Text("还没有预约——从宠物档案页添加。")
+                        if data.appointments.isEmpty && !data.owners.isEmpty {
+                            Text("还没有预约——点右上角添加。")
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
                         }
@@ -122,7 +154,7 @@ struct TodayView: View {
                 }
             }
             .sheet(isPresented: $showAdd, onDismiss: { data = Store.load() }) {
-                AppointmentEditor(data: $data, preselectedPetId: nil)
+                AppointmentEditor(data: $data, preselectedOwnerId: nil)
             }
         }
     }
@@ -143,13 +175,20 @@ struct TodayView: View {
     }
 }
 
-// MARK: - 今日上门卡（地址直显/一键拨号/一键导航/短信——健哥令⑥+N4）
+// MARK: - 今日上门卡（地址/拨号/导航/短信/工具提醒）
 
 struct TodayVisitCard: View {
     let appt: Appointment
-    let pet: Pet
     let owner: Owner
+    @Binding var data: Store.Data
     @State private var copiedMsg = false
+
+    var pets: [Pet] { appt.petIds.compactMap { id in data.pets.first { $0.id == id } } }
+    var petNames: String { pets.isEmpty ? "" : pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " ") }
+    /// 特殊工具汇总（健哥令⑧前版：避免忘带）
+    var toolsNeeded: [String] {
+        pets.map { $0.specialTools }.filter { !$0.isEmpty }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -158,7 +197,9 @@ struct TodayVisitCard: View {
                 Spacer()
                 Text(appt.date, style: .time).font(.caption).foregroundColor(.secondary)
             }
-            // 地址直显 + 点击导航（健哥令⑥+N4：上门服务=去客户家，导航直达）
+            if !petNames.isEmpty {
+                Text("\(petNames) · \(appt.groomMinutes)分钟").font(.caption).foregroundColor(.secondary)
+            }
             if !owner.address.isEmpty {
                 HStack {
                     Text(owner.address).font(.subheadline)
@@ -174,11 +215,7 @@ struct TodayVisitCard: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
-            } else {
-                Text("未填地址——到客户档案补上")
-                    .font(.caption).foregroundColor(.orange)
             }
-            // 电话直拨（健哥令⑥）
             if !owner.phone.isEmpty {
                 HStack {
                     Text(owner.phone).font(.subheadline).monospacedDigit()
@@ -194,12 +231,15 @@ struct TodayVisitCard: View {
                     .buttonStyle(.bordered)
                 }
             }
+            if !toolsNeeded.isEmpty {
+                Label("带：\(toolsNeeded.joined(separator: "；"))", systemImage: "suitcase.cart")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
             HStack {
-                Text("\(pet.type.emoji) \(pet.name) · \(appt.groomMinutes)分钟")
-                    .font(.caption).foregroundColor(.secondary)
                 Spacer()
                 Button {
-                    UIPasteboard.general.string = MessageTemplate.onMyWay(owner: owner, pet: pet, minutes: appt.driveBufferMinutes)
+                    UIPasteboard.general.string = MessageTemplate.onMyWay(owner: owner, pets: pets, minutes: appt.driveBufferMinutes)
                     copiedMsg = true
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedMsg = false }
                 } label: {
@@ -213,22 +253,19 @@ struct TodayVisitCard: View {
     }
 }
 
-// MARK: - 预约行（完成/没成功 动作——健哥令④措辞）
+// MARK: - 预约行
 
 struct AppointmentRow: View {
     let appt: Appointment
     @Binding var data: Store.Data
 
-    var pet: Pet? { data.pets.first { $0.id == appt.petId } }
-    var owner: Owner? {
-        guard let pet else { return nil }
-        return data.owners.first { $0.id == pet.ownerId }
-    }
+    var owner: Owner? { data.owners.first { $0.id == appt.ownerId } }
+    var pets: [Pet] { appt.petIds.compactMap { id in data.pets.first { $0.id == id } } }
 
     var noShowWarn: String? {
-        guard let pet else { return nil }
-        let total = pet.noShowCount + (owner?.noShowCount ?? 0)
-        return total > 0 ? "有 \(total) 次没成功记录——建议收押金" : nil
+        guard let owner else { return nil }
+        let petCount = pets.reduce(0) { $0 + $1.noShowCount }
+        return (owner.noShowCount + petCount) > 0 ? "有 \(owner.noShowCount + petCount) 次没成功记录——建议收押金" : nil
     }
 
     var tf: DateFormatter {
@@ -241,28 +278,28 @@ struct AppointmentRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(pet.map { "\($0.type.emoji) \($0.name)" } ?? "未知")
+                Text(owner?.name ?? "未知客户")
                     .font(.headline)
-                if let pet {
-                    Circle()
-                        .fill(pet.biteLevel == 2 ? Color.red : pet.biteLevel == 1 ? Color.yellow : Color.green)
-                        .frame(width: 10, height: 10)
-                }
                 Spacer()
                 Text(tf.string(from: appt.date))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            Text("美容 \(appt.groomMinutes) 分钟 · 车程缓冲 \(appt.driveBufferMinutes) 分钟")
-                .font(.caption)
-                .foregroundColor(.secondary)
-
+            if !pets.isEmpty {
+                Text(pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " ") + " · \(appt.groomMinutes)分钟 · 缓冲\(appt.driveBufferMinutes)分钟")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            if appt.remindMinutesBefore > 0 {
+                Label("提前 \(appt.remindMinutesBefore >= 60 ? "\(appt.remindMinutesBefore / 60) 小时" : "\(appt.remindMinutesBefore) 分钟")提醒", systemImage: "bell.fill")
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
             if let warn = noShowWarn {
                 Label(warn, systemImage: "exclamationmark.triangle.fill")
                     .font(.caption)
                     .foregroundColor(.orange)
             }
-
             HStack(spacing: 12) {
                 Button {
                     update(.done)
@@ -288,23 +325,28 @@ struct AppointmentRow: View {
         if let i = data.appointments.firstIndex(where: { $0.id == appt.id }) {
             data.appointments[i].status = st
             if st == .noshow {
-                if let pi = data.pets.firstIndex(where: { $0.id == appt.petId }) {
-                    data.pets[pi].noShowCount += 1
-                }
-                if let pet = pet, let oi = data.owners.firstIndex(where: { $0.id == pet.ownerId }) {
+                if let oi = data.owners.firstIndex(where: { $0.id == appt.ownerId }) {
                     data.owners[oi].noShowCount += 1
                 }
+                for pi in data.pets.indices where appt.petIds.contains(data.pets[pi].id) {
+                    data.pets[pi].noShowCount += 1
+                }
+            }
+            if st != .scheduled {
+                ReminderScheduler.cancel(appointmentId: appt.id)
             }
             Store.save(data)
         }
     }
 }
 
-// MARK: - Tab2 客户列表（健哥令②：主人在上，宠物挂客户详情内；客户带地址/家人/通讯录选人入口）
+// MARK: - Tab2 客户列表
 
 struct ClientListView: View {
     @Binding var data: Store.Data
     @State private var showAdd = false
+    @State private var exportText: String?
+    @State private var showShare = false
 
     var body: some View {
         NavigationStack {
@@ -317,11 +359,9 @@ struct ClientListView: View {
                             .foregroundColor(.orange)
                         Text("还没有客户")
                             .font(.headline)
-                        Text("美容师是与人打交道的——客户是第一实体，宠物挂在客户下。")
+                        Text("新建客户时可以顺便录入宠物信息。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 32)
                         Spacer()
                     }
                 } else {
@@ -355,6 +395,14 @@ struct ClientListView: View {
             }
             .navigationTitle("客户")
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        exportText = Exporter.makeText(data: data)
+                        showShare = true
+                    } label: {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
                 }
@@ -362,24 +410,31 @@ struct ClientListView: View {
             .sheet(isPresented: $showAdd, onDismiss: { data = Store.load() }) {
                 ClientEditor(data: $data, existing: nil)
             }
+            .sheet(isPresented: $showShare, onDismiss: { exportText = nil }) {
+                if let text = exportText {
+                    ShareSheet(items: [text])
+                }
+            }
         }
     }
 }
 
-// MARK: - 客户详情（宠物列表挂下方 + 家人 + 地址导航 + 通讯录引导）
+// MARK: - 客户详情（内嵌宠物+逐客户导出健哥令⑧）
 
 struct ClientDetailView: View {
     let owner: Owner
     @Binding var data: Store.Data
     @State private var showEdit = false
     @State private var showAddPet = false
+    @State private var exportText: String?
+    @State private var showShare = false
 
     var current: Owner { data.owners.first { $0.id == owner.id } ?? owner }
     var myPets: [Pet] { data.pets.filter { $0.ownerId == current.id } }
+    var myAppts: [Appointment] { data.appointments.filter { $0.ownerId == current.id } }
 
     var body: some View {
         List {
-            // 联系+地址（健哥令⑥）
             Section("联系与地址") {
                 if !current.phone.isEmpty {
                     Button {
@@ -408,10 +463,6 @@ struct ClientDetailView: View {
                             Image(systemName: "map.fill")
                         }
                     }
-                } else {
-                    Label("未填上门地址", systemImage: "mappin.slash")
-                        .foregroundColor(.orange)
-                        .font(.footnote)
                 }
             }
             if !current.familyMembers.isEmpty {
@@ -428,10 +479,9 @@ struct ClientDetailView: View {
                         .foregroundColor(.orange)
                 }
             }
-            // 宠物挂客户下（健哥令②：一主人多宠物）
             Section("宠物（\(myPets.count)）") {
                 if myPets.isEmpty {
-                    Text("还没有宠物——点右上角编辑或下方按钮添加").font(.footnote).foregroundColor(.secondary)
+                    Text("还没有宠物——右上角菜单添加").font(.footnote).foregroundColor(.secondary)
                 } else {
                     ForEach(myPets) { pet in
                         NavigationLink(destination: PetDetailView(pet: pet, data: $data)) {
@@ -440,9 +490,32 @@ struct ClientDetailView: View {
                     }
                 }
             }
+            Section("上门记录（\(myAppts.count)）") {
+                if myAppts.isEmpty {
+                    Text("还没有记录").font(.footnote).foregroundColor(.secondary)
+                } else {
+                    ForEach(myAppts.sorted { $0.date > $1.date }.prefix(8)) { a in
+                        HStack {
+                            Image(systemName: a.status == .done ? "checkmark.circle" : a.status == .noshow ? "xmark.circle" : "clock")
+                                .foregroundColor(a.status == .noshow ? .red : .secondary)
+                            Text(a.date, style: .date)
+                            Spacer()
+                            Text(a.status.rawValue).font(.caption).foregroundColor(.secondary)
+                        }
+                    }
+                }
+            }
         }
         .navigationTitle(current.name)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    exportText = Exporter.makeText(data: data, ownerFilter: current.id)
+                    showShare = true
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button { showEdit = true } label: { Label("编辑客户", systemImage: "pencil") }
@@ -456,10 +529,15 @@ struct ClientDetailView: View {
         .sheet(isPresented: $showAddPet, onDismiss: { data = Store.load() }) {
             PetEditor(data: $data, existing: nil, presetOwnerId: current.id)
         }
+        .sheet(isPresented: $showShare, onDismiss: { exportText = nil }) {
+            if let text = exportText {
+                ShareSheet(items: [text])
+            }
+        }
     }
 }
 
-// MARK: - Tab3 宠物列表（健哥令②：排在客户页下方/结构上挂客户；独立 Tab 便于快速查）
+// MARK: - Tab3 宠物列表
 
 struct PetListView: View {
     @Binding var data: Store.Data
@@ -483,7 +561,7 @@ struct PetListView: View {
                             .foregroundColor(.orange)
                         Text("还没有宠物")
                             .font(.headline)
-                        Text("宠物挂在客户下——也可在这里独立添加。")
+                        Text("宠物在新建客户时可顺便录入，也可在这里添加。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                         Spacer()
@@ -516,7 +594,16 @@ struct PetRow: View {
     let pet: Pet
     var body: some View {
         HStack {
-            Text(pet.type.emoji).font(.title2)
+            // 健哥令⑨：宠物图片
+            if let img = pet.photoData, let ui = UIImage(data: img) {
+                Image(uiImage: ui)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 44, height: 44)
+                    .clipShape(Circle())
+            } else {
+                Text(pet.type.emoji).font(.title2)
+            }
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(pet.name).font(.headline)
@@ -525,13 +612,19 @@ struct PetRow: View {
                     } else if pet.biteLevel == 1 {
                         Text("谨慎").font(.caption2).foregroundColor(.orange)
                     }
+                    // 状态标记（健哥令⑦）
+                    if pet.status != .normal {
+                        Text(pet.status.rawValue)
+                            .font(.caption2)
+                            .foregroundColor(pet.status == .sick ? .orange : .secondary)
+                    }
                 }
                 Text("\(pet.breed) · \(pet.type.rawValue)")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             Spacer()
-            if let exp = pet.vaccineExpiry, exp < Date() {
+            if let exp = pet.vaccineExpiry, exp < Date(), pet.status == .normal {
                 Image(systemName: "syringe")
                     .foregroundColor(.red)
             }
@@ -539,22 +632,30 @@ struct PetRow: View {
     }
 }
 
-// MARK: - 宠物详情（配方/特殊工具健哥令⑧/疫苗/历史）
+// MARK: - 宠物详情（含喜好健哥令⑦/图片⑨）
 
 struct PetDetailView: View {
     let pet: Pet
     @Binding var data: Store.Data
     @State private var showEdit = false
-    @State private var showBook = false
 
     var current: Pet { data.pets.first { $0.id == pet.id } ?? pet }
     var owner: Owner? { data.owners.first { $0.id == current.ownerId } }
-    var history: [Appointment] {
-        data.appointments.filter { $0.petId == current.id }.sorted { $0.date > $1.date }
-    }
 
     var body: some View {
         List {
+            // 大图（健哥令⑨）
+            if let img = current.photoData, let ui = UIImage(data: img) {
+                Section {
+                    Image(uiImage: ui)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 260)
+                        .frame(maxWidth: .infinity)
+                        .cornerRadius(12)
+                        .listRowInsets(EdgeInsets())
+                }
+            }
             if let owner {
                 Section("主人") {
                     NavigationLink(destination: ClientDetailView(owner: owner, data: $data)) {
@@ -567,6 +668,24 @@ struct PetDetailView: View {
                     }
                 }
             }
+            if current.status != .normal {
+                Section {
+                    Label("状态：\(current.status.rawValue)", systemImage: current.status == .passed ? "heart.slash" : "stethoscope")
+                        .foregroundColor(current.status == .sick ? .orange : .secondary)
+                }
+            }
+            Section("喜好（沟通时用）") {
+                if !current.favoriteFood.isEmpty {
+                    Label("爱吃：\(current.favoriteFood)", systemImage: "fork.knife")
+                }
+                if !current.favoritePetting.isEmpty {
+                    Label("爱摸：\(current.favoritePetting)", systemImage: "hand.tap")
+                }
+                if current.favoriteFood.isEmpty && current.favoritePetting.isEmpty {
+                    Text("喜欢吃什么？喜欢怎么摸它？——上门时讨好它用。")
+                        .font(.footnote).foregroundColor(.secondary)
+                }
+            }
             Section("美容配方") {
                 if current.groomRecipe.isEmpty {
                     Text("造型/刀头/洗毛精备注——写一次，下次直接用。")
@@ -576,15 +695,14 @@ struct PetDetailView: View {
                     Text(current.groomRecipe)
                 }
             }
-            // 特殊工具（健哥令⑧：避免忘带）
             Section("特殊工具携带") {
                 if current.specialTools.isEmpty {
-                    Text("有无需要特别带的工具？（如大型犬专用吹水机/猫用嘴套）")
+                    Text("有无需要特别带的工具？")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 } else {
                     Label(current.specialTools, systemImage: "suitcase.cart")
-                        .foregroundColor(current.specialTools.isEmpty ? .primary : .orange)
+                        .foregroundColor(.orange)
                 }
             }
             Section("健康与脾气") {
@@ -605,41 +723,26 @@ struct PetDetailView: View {
                             .foregroundColor(exp < Date() ? .red : .primary)
                     }
                 }
-                if current.noShowCount > 0 {
-                    Label("\(current.noShowCount) 次没成功", systemImage: "exclamationmark.triangle")
-                        .foregroundColor(.orange)
-                }
-            }
-            Section("历史") {
-                if history.isEmpty {
-                    Text("还没有上门记录").font(.footnote).foregroundColor(.secondary)
-                } else {
-                    ForEach(history.prefix(10)) { appt in
-                        HStack {
-                            Image(systemName: appt.status == .done ? "checkmark.circle" : appt.status == .noshow ? "xmark.circle" : "clock")
-                                .foregroundColor(appt.status == .noshow ? .red : .secondary)
-                            Text(appt.date, style: .date)
-                            Spacer()
-                            Text(appt.status.rawValue).font(.caption).foregroundColor(.secondary)
-                        }
-                    }
-                }
             }
         }
         .navigationTitle(current.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Menu {
-                    Button { showEdit = true } label: { Label("编辑", systemImage: "pencil") }
-                    Button { showBook = true } label: { Label("约一单", systemImage: "calendar.badge.plus") }
-                } label: { Image(systemName: "ellipsis.circle") }
+                Button { showEdit = true } label: { Image(systemName: "pencil") }
             }
         }
         .sheet(isPresented: $showEdit, onDismiss: { data = Store.load() }) {
             PetEditor(data: $data, existing: current, presetOwnerId: nil)
         }
-        .sheet(isPresented: $showBook, onDismiss: { data = Store.load() }) {
-            AppointmentEditor(data: $data, preselectedPetId: current.id)
-        }
     }
+}
+
+// MARK: - 系统分享面板（导出用）
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
