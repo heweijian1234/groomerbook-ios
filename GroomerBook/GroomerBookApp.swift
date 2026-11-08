@@ -25,7 +25,7 @@ enum ReminderScheduler {
         guard appointment.status == .scheduled else { return }
 
         let hoursText = { (mins: Int) -> String in
-            mins >= 60 ? "提前 \(mins / 60) 小时" : "提前 \(mins) 分钟"
+            mins >= 60 ? L("\(mins / 60)h before", "提前 \(mins / 60) 小时") : L("\(mins) min before", "提前 \(mins) 分钟")
         }
         var idx = 0
         for mins in appointment.remindMinutesList {
@@ -33,8 +33,10 @@ enum ReminderScheduler {
             guard triggerDate > Date() else { continue }
 
             let content = UNMutableNotificationContent()
-            content.title = "上门提醒（\(hoursText(mins))）"
-            content.body = "\(hoursText(mins))出发去 \(ownerName) 家（\(petNames)）。\(mins >= 120 ? "记得带齐工具。" : "")"
+            content.title = L("Visit reminder (\(hoursText(mins)))", "上门提醒（\(hoursText(mins))）")
+            content.body = AppLang.current == .en
+                ? "\(hoursText(mins)) - heading to " + ownerName + "\u{2019}s place (" + petNames + ")." + (mins >= 120 ? " Pack your tools." : "")
+                : "\(hoursText(mins))出发去 \(ownerName) 家（\(petNames)）。\(mins >= 120 ? "记得带齐工具。" : "")"
             content.sound = .default
 
             let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
