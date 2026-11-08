@@ -250,7 +250,12 @@ enum Exporter {
                 lines.append("-- 上门记录（\(appts.count)）--")
                 for a in appts {
                     let petNames = a.petIds.compactMap { id in data.pets.first { $0.id == id }?.name }.joined(separator: "和")
-                    lines.append("  \(df.string(from: a.date)) \(petNames) \(a.status.rawValue) \(a.groomMinutes)分钟")
+                    var l = "  \(df.string(from: a.date)) \(petNames) \(a.status.rawValue) \(a.groomMinutes)分钟"
+                    if !a.remindMinutesList.isEmpty {
+                        l += " · 闹钟\(a.remindMinutesList.count)个"
+                    }
+                    if !a.note.isEmpty { l += " · 备注：\(a.note)" }
+                    lines.append(l)
                 }
             }
         }

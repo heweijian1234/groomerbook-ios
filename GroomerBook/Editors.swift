@@ -366,6 +366,7 @@ struct PetEditor: View {
 struct AppointmentEditor: View {
     @Binding var data: Store.Data
     let preselectedOwnerId: UUID?
+    var editing: Appointment? = nil    // 健哥令第五轮①：编辑模式（带原值）
     @Environment(\.dismiss) private var dismiss
 
     @State private var ownerId: UUID?
@@ -375,6 +376,7 @@ struct AppointmentEditor: View {
     @State private var buffer = 15
     @State private var remindSelections: [Int] = [60]
     @State private var note = ""
+    @State private var loaded = false
 
     var ownerPets: [Pet] {
         guard let oid = ownerId else { return [] }
@@ -496,7 +498,17 @@ struct AppointmentEditor: View {
                 }
             }
             .onAppear {
-                if ownerId == nil {
+                // 健哥令第五轮①：编辑模式带原值
+                if let appt = editing, !loaded {
+                    ownerId = appt.ownerId
+                    selectedPetIds = Set(appt.petIds)
+                    date = appt.date
+                    minutes = appt.groomMinutes
+                    buffer = appt.driveBufferMinutes
+                    remindSelections = appt.remindMinutesList.isEmpty ? [] : appt.remindMinutesList
+                    note = appt.note
+                    loaded = true
+                } else if ownerId == nil {
                     ownerId = preselectedOwnerId ?? data.owners.first?.id
                     if let p = ownerPets.first {
                         minutes = p.defaultMinutes
@@ -513,17 +525,20 @@ struct AppointmentEditor: View {
 
     private func save() {
         guard let oid = ownerId else { return }
-        let appt = Appointment(ownerId: oid, petIds: Array(selectedPetIds), date: date,
+        let appt = Appointment(id: editing?.id ?? UUID(), ownerId: oid, petIds: Array(selectedPetIds), date: date,
                                groomMinutes: minutes, driveBufferMinutes: buffer,
-                               remindMinutesList: remindSelections, note: note)
+                               remindMinutesList: remindSelections, status: editing?.status ?? .scheduled, note: note)
 
-        data.appointments.append(appt)
-        Store.save(data)
-        // 闹钟（健哥令⑩-v2 多闹钟）
-        let petNames = data.pets.filter { selectedPetIds.contains($0.id) }.map { $0.name }.joined(separator: "和")
-        if let owner = data.owners.first(where: { $0.id == oid }) {
-            ReminderScheduler.schedule(appointment: appt, ownerName: owner.name, petNames: petNames)
+        if let editing, let idx = data.appointments.firstIndex(where: { $0.id == editing.id }) {
+            data.appointments[idx] = appt    // 健哥令第五轮①：更新而非追加
+        } else {
+            data.appointments.append(appt)
         }
+        Store.save(data)
+        // 闹钟（健哥令⑩-v2 多闹钟；编辑后重排）
+        ReminderScheduler.schedule(appointment: appt,
+                                   ownerName: data.owners.first(where: { $0.id == oid })?.name ?? "",
+                                   petNames: data.pets.filter { selectedPetIds.contains($0.id) }.map { $0.name }.joined(separator: "和"))
         dismiss()
     }
 }

@@ -85,6 +85,7 @@ struct RootView: View {
 struct TodayView: View {
     @Binding var data: Store.Data
     @State private var showAdd = false
+    @State private var editingAppt: Appointment?   // 健哥令第五轮①：点行进编辑
 
     /// 该约了
     var dueSoon: [(Pet, Int)] {
@@ -124,7 +125,7 @@ struct TodayView: View {
                     List {
                         ForEach(todayAppointments) { appt in
                             if let owner = data.owners.first(where: { $0.id == appt.ownerId }) {
-                                TodayVisitCard(appt: appt, owner: owner, data: $data)
+                                TodayVisitCard(appt: appt, owner: owner, data: $data, editingAppt: $editingAppt)
                             }
                         }
                         if !dueSoon.isEmpty {
@@ -147,7 +148,20 @@ struct TodayView: View {
                         ForEach(groupedByDay, id: \.0) { day, appts in
                             Section(day) {
                                 ForEach(appts) { appt in
-                                    AppointmentRow(appt: appt, data: $data)
+                                    // 健哥令第五轮①：左滑删除 + 点行进编辑（在路上短信已删，换成编辑）
+                                    Button {
+                                        editingAppt = appt
+                                    } label: {
+                                        AppointmentRow(appt: appt, data: $data)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                .onDelete { offsets in
+                                    for i in offsets {
+                                        ReminderScheduler.cancel(appointmentId: appts[i].id)
+                                        data.appointments.removeAll { $0.id == appts[i].id }
+                                    }
+                                    Store.save(data)
                                 }
                             }
                         }
@@ -167,6 +181,10 @@ struct TodayView: View {
             }
             .sheet(isPresented: $showAdd, onDismiss: { data = Store.load() }) {
                 AppointmentEditor(data: $data, preselectedOwnerId: nil)
+            }
+            // 健哥令第五轮①：点已有预约→编辑器带原值
+            .sheet(item: $editingAppt, onDismiss: { data = Store.load() }) { appt in
+                AppointmentEditor(data: $data, preselectedOwnerId: nil, editing: appt)
             }
         }
     }
@@ -193,7 +211,7 @@ struct TodayVisitCard: View {
     let appt: Appointment
     let owner: Owner
     @Binding var data: Store.Data
-    @State private var copiedMsg = false
+    @Binding var editingAppt: Appointment?   // 健哥令第五轮①：编辑入口
 
     var pets: [Pet] { appt.petIds.compactMap { id in data.pets.first { $0.id == id } } }
     var petNames: String { pets.isEmpty ? "" : pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " ") }
@@ -248,14 +266,13 @@ struct TodayVisitCard: View {
                     .font(.caption)
                     .foregroundColor(.orange)
             }
+            // 健哥令第五轮①：在路上短信已删——换编辑入口
             HStack {
                 Spacer()
                 Button {
-                    UIPasteboard.general.string = MessageTemplate.onMyWay(owner: owner, pets: pets, minutes: appt.driveBufferMinutes)
-                    copiedMsg = true
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedMsg = false }
+                    editingAppt = appt
                 } label: {
-                    Label(copiedMsg ? "已复制！" : "在路上短信", systemImage: "message.fill")
+                    Label("编辑此单", systemImage: "pencil")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -426,9 +443,9 @@ struct ClientListView: View {
                 ClientEditor(data: $data, existing: nil)
             }
             .sheet(isPresented: $showShare, onDismiss: { exportText = nil }) {
-                if let text = exportText {
-                    ShareSheet(items: [text])
-                }
+                // 健哥令第五轮③：卡死根因=首帧时 exportText 还没就绪渲染空 sheet。
+                // 改：始终构造（text 为空时给占位），不再 if-let 短路
+                ShareSheet(items: [exportText ?? ""])
             }
         }
     }
@@ -545,9 +562,8 @@ struct ClientDetailView: View {
             PetEditor(data: $data, existing: nil, presetOwnerId: current.id)
         }
         .sheet(isPresented: $showShare, onDismiss: { exportText = nil }) {
-            if let text = exportText {
-                ShareSheet(items: [text])
-            }
+            // 健哥令第五轮③：同上——不做 if-let 短路（首点必出内容）
+            ShareSheet(items: [exportText ?? ""])
         }
     }
 }
