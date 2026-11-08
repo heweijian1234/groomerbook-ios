@@ -12,17 +12,6 @@ enum PetType: String, Codable, CaseIterable {
     var emoji: String {
         switch self { case .dog: return "🐕"; case .cat: return "🐈"; case .horse: return "🐎"; case .other: return "🐾" }
     }
-
-    /// 显示值（上架英文版健哥令：AppLang 控制）
-    var display: String {
-        AppLang.current == .en
-            ? ["Dog", "Cat", "Horse", "Other"][index]
-            : rawValue
-    }
-
-    private var index: Int {
-        switch self { case .dog: return 0; case .cat: return 1; case .horse: return 2; case .other: return 3 }
-    }
 }
 
 /// 宠物状态（健哥令⑦：可标记生病/死亡/残疾/离开）
@@ -32,17 +21,6 @@ enum PetStatus: String, Codable, CaseIterable {
     case disabled = "残疾"
     case left = "离开（换美容师/搬家）"
     case passed = "去世 💔"
-
-    /// 显示值（上架英文版）
-    var display: String {
-        switch self {
-        case .normal: return L("Normal", "正常")
-        case .sick: return L("Sick", "生病")
-        case .disabled: return L("Disabled", "残疾")
-        case .left: return L("Left (moved / switched groomer)", "离开（换美容师/搬家）")
-        case .passed: return L("Passed away 💔", "去世 💔")
-        }
-    }
 
     var color: String {
         switch self { case .normal: return "primary"; case .sick: return "orange"; case .disabled: return "blue"; case .left: return "gray"; case .passed: return "gray" }
@@ -140,16 +118,6 @@ struct Appointment: Codable, Identifiable, Equatable {
         case done = "已完成"
         case noshow = "没成功"
         case canceled = "已取消"
-
-        /// 显示值（上架英文版）
-        var display: String {
-            switch self {
-            case .scheduled: return L("Scheduled", "已约")
-            case .done: return L("Done", "已完成")
-            case .noshow: return L("No-show", "没成功")
-            case .canceled: return L("Canceled", "已取消")
-            }
-        }
     }
 
     /// 候选提醒时长（健哥令⑩-v2：1/2/3/4/6/10小时）

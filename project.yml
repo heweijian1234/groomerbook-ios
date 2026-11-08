@@ -21,14 +21,14 @@ targets:
     info:
       path: GroomerBook/Info.plist
       properties:
-        CFBundleDisplayName: GroomerBook
+        CFBundleDisplayName: 宠物美容台账
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-        NSContactsUsageDescription: "Contacts are read only when you pick a client from your address book, to fill in their name, phone and email. Nothing is uploaded."
+        NSContactsUsageDescription: "仅当你主动从通讯录选择客户时读取姓名/电话/邮箱，用于快速填入客户资料。不做任何上传。"
         ITSAppUsesNonExemptEncryption: false
     settings:
       base:

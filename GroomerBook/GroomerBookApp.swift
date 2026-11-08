@@ -64,16 +64,16 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $tab) {
             TodayView(data: $data)
-                .tabItem { Label(L("Today", "今日"), systemImage: "calendar") }
+                .tabItem { Label("今日", systemImage: "calendar") }
                 .tag(0)
             ClientListView(data: $data)
-                .tabItem { Label(L("Clients", "客户"), systemImage: "person.2") }
+                .tabItem { Label("客户", systemImage: "person.2") }
                 .tag(1)
             PetListView(data: $data)
-                .tabItem { Label(L("Pets", "宠物"), systemImage: "pawprint") }
+                .tabItem { Label("宠物", systemImage: "pawprint") }
                 .tag(2)
             FeedbackView()
-                .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
+                .tabItem { Label("我的", systemImage: "person.crop.circle") }
                 .tag(3)
         }
         .onAppear { data = Store.load() }
@@ -112,9 +112,9 @@ struct TodayView: View {
                         Image(systemName: "scissors")
                             .font(.system(size: 52))
                             .foregroundColor(.orange)
-                        Text(L("Your mobile grooming book", "你的移动美容台账"))
+                        Text("你的移动美容台账")
                             .font(.headline)
-                        Text(L("Add a client first, then book your first visit. Everything stays on this phone.", "先加客户（含宠物），然后约第一单。所有数据只留在这台手机上。"))
+                        Text("先加客户（含宠物），然后约第一单。所有数据只留在这台手机上。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
@@ -129,12 +129,12 @@ struct TodayView: View {
                             }
                         }
                         if !dueSoon.isEmpty {
-                            Section(L("Due for rebooking", "该约了")) {
+                            Section("该约了") {
                                 ForEach(dueSoon, id: \.0.id) { pet, days in
                                     HStack {
                                         VStack(alignment: .leading) {
                                             Text("\(pet.type.emoji) \(pet.name)").font(.headline)
-                                            Text(L10n.daysSinceLast(days))
+                                            Text("距上次美容 \(days) 天")
                                                 .font(.caption)
                                                 .foregroundColor(.secondary)
                                         }
@@ -166,14 +166,14 @@ struct TodayView: View {
                             }
                         }
                         if data.appointments.isEmpty && !data.owners.isEmpty {
-                            Text(L("No appointments yet — tap + to add.", "还没有预约——点右上角添加。"))
+                            Text("还没有预约——点右上角添加。")
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
             }
-            .navigationTitle(L("Today", "今日"))
+            .navigationTitle("今日")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
@@ -223,12 +223,12 @@ struct TodayVisitCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(L("📍 Today's visit", "📍 今天上门")).font(.headline)
+                Text("📍 今天上门").font(.headline)
                 Spacer()
                 Text(appt.date, style: .time).font(.caption).foregroundColor(.secondary)
             }
             if !petNames.isEmpty {
-                Text("\(petNames) · \(appt.groomMinutes) " + L("min", "分钟")).font(.caption).foregroundColor(.secondary)
+                Text("\(petNames) · \(appt.groomMinutes)分钟").font(.caption).foregroundColor(.secondary)
             }
             if !owner.address.isEmpty {
                 HStack {
@@ -240,7 +240,7 @@ struct TodayVisitCard: View {
                             UIApplication.shared.open(url)
                         }
                     } label: {
-                        Label(L("Navigate", "导航"), systemImage: "map.fill")
+                        Label("导航", systemImage: "map.fill")
                             .font(.caption)
                     }
                     .buttonStyle(.borderedProminent)
@@ -255,14 +255,14 @@ struct TodayVisitCard: View {
                             UIApplication.shared.open(url)
                         }
                     } label: {
-                        Label(L("Call", "拨打"), systemImage: "phone.fill")
+                        Label("拨打", systemImage: "phone.fill")
                             .font(.caption)
                     }
                     .buttonStyle(.bordered)
                 }
             }
             if !toolsNeeded.isEmpty {
-                Label(L10n.toolsNeeded(toolsNeeded), systemImage: "suitcase.cart")
+                Label("带：\(toolsNeeded.joined(separator: "；"))", systemImage: "suitcase.cart")
                     .font(.caption)
                     .foregroundColor(.orange)
             }
@@ -272,7 +272,7 @@ struct TodayVisitCard: View {
                 Button {
                     editingAppt = appt
                 } label: {
-                    Label(L("Edit", "编辑此单"), systemImage: "pencil")
+                    Label("编辑此单", systemImage: "pencil")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -336,7 +336,7 @@ struct AppointmentRow: View {
                 Button {
                     update(.done)
                 } label: {
-                    Label(L("Done", "完成"), systemImage: "checkmark.circle.fill")
+                    Label("完成", systemImage: "checkmark.circle.fill")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -344,7 +344,7 @@ struct AppointmentRow: View {
                 Button {
                     update(.noshow)
                 } label: {
-                    Label(L("No-show", "没成功"), systemImage: "xmark.circle")
+                    Label("没成功", systemImage: "xmark.circle")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -389,9 +389,9 @@ struct ClientListView: View {
                         Image(systemName: "person.2")
                             .font(.system(size: 52))
                             .foregroundColor(.orange)
-                        Text(L("No clients yet", "还没有客户"))
+                        Text("还没有客户")
                             .font(.headline)
-                        Text(L("You can add pets right when creating a client.", "新建客户时可以顺便录入宠物信息。"))
+                        Text("新建客户时可以顺便录入宠物信息。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                         Spacer()
@@ -404,7 +404,7 @@ struct ClientListView: View {
                                     HStack {
                                         Text(owner.name).font(.headline)
                                         if owner.noShowCount > 0 {
-                                            Text("\(owner.noShowCount) " + L("no-shows", "次没成功"))
+                                            Text("\(owner.noShowCount) 次没成功")
                                                 .font(.caption2)
                                                 .foregroundColor(.orange)
                                         }
@@ -425,7 +425,7 @@ struct ClientListView: View {
                     }
                 }
             }
-            .navigationTitle(L("Clients", "客户"))
+            .navigationTitle("客户")
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
@@ -467,7 +467,7 @@ struct ClientDetailView: View {
 
     var body: some View {
         List {
-            Section(L("Contact & Address", "联系与地址")) {
+            Section("联系与地址") {
                 if !current.phone.isEmpty {
                     Button {
                         if let url = URL(string: "tel://\(current.phone.filter { !$0.isWhitespace && $0 != "-" })") {
@@ -498,22 +498,22 @@ struct ClientDetailView: View {
                 }
             }
             if !current.familyMembers.isEmpty {
-                Section(L("Family (contacts)", "家人（对接人）")) {
+                Section("家人（对接人）") {
                     Label(current.familyMembers, systemImage: "person.3")
                 }
             }
             if !current.notes.isEmpty {
-                Section(L("Preferences & Notes", "偏好与备注")) { Text(current.notes) }
+                Section("偏好与备注") { Text(current.notes) }
             }
             if current.noShowCount > 0 {
                 Section {
-                    Label(L10n.noShowWarn(current.noShowCount), systemImage: "exclamationmark.triangle")
+                    Label("\(current.noShowCount) 次没成功记录", systemImage: "exclamationmark.triangle")
                         .foregroundColor(.orange)
                 }
             }
-            Section(L10n.countHeader("Pets", "宠物", myPets.count)) {
+            Section("宠物（\(myPets.count)）") {
                 if myPets.isEmpty {
-                    Text(L("No pets yet — use the menu (top right)", "还没有宠物——右上角菜单添加")).font(.footnote).foregroundColor(.secondary)
+                    Text("还没有宠物——右上角菜单添加").font(.footnote).foregroundColor(.secondary)
                 } else {
                     ForEach(myPets) { pet in
                         NavigationLink(destination: PetDetailView(pet: pet, data: $data)) {
@@ -522,9 +522,9 @@ struct ClientDetailView: View {
                     }
                 }
             }
-            Section(L10n.countHeader("上门记录", "Visit History", myAppts.count)) {
+            Section("上门记录（\(myAppts.count)）") {
                 if myAppts.isEmpty {
-                    Text(L("No visits yet", "还没有记录")).font(.footnote).foregroundColor(.secondary)
+                    Text("还没有记录").font(.footnote).foregroundColor(.secondary)
                 } else {
                     ForEach(myAppts.sorted { $0.date > $1.date }.prefix(8)) { a in
                         HStack {
@@ -532,7 +532,7 @@ struct ClientDetailView: View {
                                 .foregroundColor(a.status == .noshow ? .red : .secondary)
                             Text(a.date, style: .date)
                             Spacer()
-                            Text(a.status.display).font(.caption).foregroundColor(.secondary)
+                            Text(a.status.rawValue).font(.caption).foregroundColor(.secondary)
                         }
                     }
                 }
@@ -550,8 +550,8 @@ struct ClientDetailView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    Button { showEdit = true } label: { Label(L("Edit Client", "编辑客户"), systemImage: "pencil") }
-                    Button { showAddPet = true } label: { Label(L("Add Pet", "加宠物"), systemImage: "plus.circle") }
+                    Button { showEdit = true } label: { Label("编辑客户", systemImage: "pencil") }
+                    Button { showAddPet = true } label: { Label("加宠物", systemImage: "plus.circle") }
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
@@ -590,9 +590,9 @@ struct PetListView: View {
                         Image(systemName: "pawprint")
                             .font(.system(size: 52))
                             .foregroundColor(.orange)
-                        Text(L("No pets yet", "还没有宠物"))
+                        Text("还没有宠物")
                             .font(.headline)
-                        Text(L("Pets are added with a client — or here.", "宠物在新建客户时可顺便录入，也可在这里添加。"))
+                        Text("宠物在新建客户时可顺便录入，也可在这里添加。")
                             .font(.footnote)
                             .foregroundColor(.secondary)
                         Spacer()
@@ -608,7 +608,7 @@ struct PetListView: View {
                     }
                 }
             }
-            .navigationTitle(L("Pets", "宠物"))
+            .navigationTitle("宠物")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
@@ -639,18 +639,18 @@ struct PetRow: View {
                 HStack(spacing: 6) {
                     Text(pet.name).font(.headline)
                     if pet.biteLevel == 2 {
-                        Text(L("BITES", "咬人")).font(.caption2).foregroundColor(.red)
+                        Text("咬人").font(.caption2).foregroundColor(.red)
                     } else if pet.biteLevel == 1 {
-                        Text(L("CARE", "谨慎")).font(.caption2).foregroundColor(.orange)
+                        Text("谨慎").font(.caption2).foregroundColor(.orange)
                     }
                     // 状态标记（健哥令⑦）
                     if pet.status != .normal {
-                        Text(pet.status.display)
+                        Text(pet.status.rawValue)
                             .font(.caption2)
                             .foregroundColor(pet.status == .sick ? .orange : .secondary)
                     }
                 }
-                Text("\(pet.breed) · \(pet.type.display)")
+                Text("\(pet.breed) · \(pet.type.rawValue)")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -688,7 +688,7 @@ struct PetDetailView: View {
                 }
             }
             if let owner {
-                Section(L("Owner", "主人")) {
+                Section("主人") {
                     NavigationLink(destination: ClientDetailView(owner: owner, data: $data)) {
                         VStack(alignment: .leading) {
                             Text(owner.name)
@@ -701,34 +701,34 @@ struct PetDetailView: View {
             }
             if current.status != .normal {
                 Section {
-                    Label(L("Status", "状态") + ": " + current.status.enValue, systemImage: current.status == .passed ? "heart.slash" : "stethoscope")
+                    Label("状态：\(current.status.rawValue)", systemImage: current.status == .passed ? "heart.slash" : "stethoscope")
                         .foregroundColor(current.status == .sick ? .orange : .secondary)
                 }
             }
-            Section(L("Preferences (rapport)", "喜好（沟通时用）")) {
+            Section("喜好（沟通时用）") {
                 if !current.favoriteFood.isEmpty {
-                    Label(L("Loves: ", "爱吃：") + current.favoriteFood, systemImage: "fork.knife")
+                    Label("爱吃：\(current.favoriteFood)", systemImage: "fork.knife")
                 }
                 if !current.favoritePetting.isEmpty {
-                    Label(L("Loves: ", "爱摸：") + current.favoritePetting, systemImage: "hand.tap")
+                    Label("爱摸：\(current.favoritePetting)", systemImage: "hand.tap")
                 }
                 if current.favoriteFood.isEmpty && current.favoritePetting.isEmpty {
-                    Text(L("Favorite treats? Where does it like to be petted? Great for winning them over on visits.", "喜欢吃什么？喜欢怎么摸它？——上门时讨好它用。"))
+                    Text("喜欢吃什么？喜欢怎么摸它？——上门时讨好它用。")
                         .font(.footnote).foregroundColor(.secondary)
                 }
             }
-            Section(L("Grooming Recipe", "美容配方")) {
+            Section("美容配方") {
                 if current.groomRecipe.isEmpty {
-                    Text(L("Style / blade / shampoo notes — write once, reuse every visit.", "造型/刀头/洗毛精备注——写一次，下次直接用。"))
+                    Text("造型/刀头/洗毛精备注——写一次，下次直接用。")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 } else {
                     Text(current.groomRecipe)
                 }
             }
-            Section(L("Special Tools to Bring", "特殊工具携带")) {
+            Section("特殊工具携带") {
                 if current.specialTools.isEmpty {
-                    Text(L("Any special tools to bring?", "有无需要特别带的工具？"))
+                    Text("有无需要特别带的工具？")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 } else {
@@ -736,19 +736,19 @@ struct PetDetailView: View {
                         .foregroundColor(.orange)
                 }
             }
-            Section(L("Health & Temperament", "健康与脾气")) {
+            Section("健康与脾气") {
                 if !current.temperament.isEmpty {
                     Label(current.temperament, systemImage: "heart")
                 }
                 HStack {
-                    Text(L("Bite risk", "咬人风险"))
+                    Text("咬人风险")
                     Spacer()
                     Text(["安全", "谨慎", "咬人"][current.biteLevel])
                         .foregroundColor(current.biteLevel == 2 ? .red : current.biteLevel == 1 ? .orange : .green)
                 }
                 if let exp = current.vaccineExpiry {
                     HStack {
-                        Label(L("Vaccine", "疫苗"), systemImage: "syringe")
+                        Label("疫苗", systemImage: "syringe")
                         Spacer()
                         Text(exp, style: .date)
                             .foregroundColor(exp < Date() ? .red : .primary)
