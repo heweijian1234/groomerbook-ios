@@ -248,7 +248,7 @@ struct PetEditor: View {
                 }
                 Section(L("Pet", "宠物")) {
                     TextField(L("Name", "名字"), text: $name)
-                    Picker("类型", selection: $type) {
+                    Picker(L("Type", "类型"), selection: $type) {
                         ForEach(PetType.allCases, id: \.self) { t in
                             Text("\(t.emoji) \(t.display)").tag(t)
                         }
@@ -264,7 +264,7 @@ struct PetEditor: View {
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
-                        Picker("客户", selection: $ownerId) {
+                        Picker(L("Client", "客户"), selection: $ownerId) {
                             ForEach(data.owners) { o in
                                 Text(o.name).tag(Optional(o.id))
                             }
@@ -277,7 +277,7 @@ struct PetEditor: View {
                     TextField(L("Where to pet? (chin rubs / ear scratches…)", "喜欢怎么摸它？（摸下巴/揉耳朵根…）"), text: $favoritePetting)
                 }
                 Section(L("Temperament", "脾气")) {
-                    Picker("咬人风险", selection: $biteLevel) {
+                    Picker(L("Bite risk", "咬人风险"), selection: $biteLevel) {
                         Text(L("Safe", "安全")).tag(0)
                         Text(L("Care", "谨慎")).tag(1)
                         Text(L("Bites", "咬人")).tag(2)
@@ -288,7 +288,7 @@ struct PetEditor: View {
                 }
                 // 健哥令⑦：状态标记
                 Section(L("Status", "状态")) {
-                    Picker("当前状态", selection: $status) {
+                    Picker(L("Current status", "当前状态"), selection: $status) {
                         ForEach(PetStatus.allCases, id: \.self) { s in
                             Text(s.display).tag(s)
                         }
@@ -392,7 +392,7 @@ struct AppointmentEditor: View {
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
-                        Picker("客户", selection: $ownerId) {
+                        Picker(L("Client", "客户"), selection: $ownerId) {
                             ForEach(data.owners) { o in
                                 Text(o.name).tag(Optional(o.id))
                             }
@@ -443,7 +443,7 @@ struct AppointmentEditor: View {
                 Section(L("Time & Duration", "时间与时长")) {
                     DatePicker(L("Date & time", "日期与时间"), selection: $date)
                     // 健哥令③：美容时长可选（不叫"默认"）
-                    Picker("美容时长", selection: $minutes) {
+                    Picker(L("Groom duration", "美容时长"), selection: $minutes) {
                         Text(L("45 min", "45 分钟")).tag(45)
                         Text(L("60 min", "60 分钟")).tag(60)
                         Text(L("90 min", "90 分钟")).tag(90)

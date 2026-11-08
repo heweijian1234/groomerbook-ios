@@ -232,7 +232,11 @@ enum Store {
 
 enum MessageTemplate {
     static func onMyWay(owner: Owner, pets: [Pet], minutes: Int) -> String {
-        let names = pets.map { $0.name }.joined(separator: "和")
+        let sep = AppLang.current == .en ? " & " : "和"
+        let names = pets.map { $0.name }.joined(separator: sep)
+        if AppLang.current == .en {
+            return "Hi \(owner.name), this is your groomer - on my way now for \(names), about \(minutes) min out. Please have them ready and the gate accessible."
+        }
         return "\(owner.name)您好，我是您的宠物美容师——现在正在前往您家的路上，预计 \(minutes) 分钟后到，请把\(names)准备好、门能开。"
     }
 }
