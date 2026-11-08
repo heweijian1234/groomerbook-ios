@@ -211,7 +211,12 @@ enum Exporter {
         df.dateFormat = "yyyy-MM-dd HH:mm"
         df.locale = Locale(identifier: "zh_CN")
         var lines: [String] = []
-        let owners = ownerFilter.map { data.owners.filter { $0.id == $0 } } ?? data.owners
+        let owners: [Owner]
+        if let filter = ownerFilter {
+            owners = data.owners.filter { $0.id == filter }
+        } else {
+            owners = data.owners
+        }
 
         lines.append("宠物美容台账 导出 · \(df.string(from: Date()))")
         lines.append(String(repeating: "=", count: 40))
