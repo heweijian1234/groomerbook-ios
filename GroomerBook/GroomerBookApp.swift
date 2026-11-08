@@ -703,7 +703,7 @@ struct PetDetailView: View {
             }
             if current.status != .normal {
                 Section {
-                    Label(L("Status", "状态") + ": " + current.status.enValue, systemImage: current.status == .passed ? "heart.slash" : "stethoscope")
+                    Label(L("Status", "状态") + ": " + current.status.display, systemImage: current.status == .passed ? "heart.slash" : "stethoscope")
                         .foregroundColor(current.status == .sick ? .orange : .secondary)
                 }
             }
