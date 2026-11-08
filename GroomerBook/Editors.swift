@@ -33,48 +33,48 @@ struct ClientEditor: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("姓名", text: $name)
+                    TextField(L("Name", "姓名"), text: $name)
                     Button {
                         showContactPicker = true
                     } label: {
-                        Label("从通讯录选择", systemImage: "person.crop.rectangle.badge.plus")
+                        Label(L("Pick from Contacts", "从通讯录选择"), systemImage: "person.crop.rectangle.badge.plus")
                     }
                 }
-                Section("联系") {
-                    TextField("电话（点击可自动拨号）", text: $phone)
+                Section(L("Contact", "联系")) {
+                    TextField(L("Phone (tap to call)", "电话（点击可自动拨号）"), text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("邮箱", text: $email)
+                    TextField(L("Email", "邮箱"), text: $email)
                         .keyboardType(.emailAddress)
                         .textInputAutocapitalization(.never)
                 }
-                Section("上门地址") {
-                    TextField("小区/门牌/楼层（首页可导航）", text: $address, axis: .vertical)
+                Section(L("Service Address", "上门地址")) {
+                    TextField(L("Street / gate / floor (navigate from Today)", "小区/门牌/楼层（首页可导航）"), text: $address, axis: .vertical)
                         .lineLimit(2...3)
                 }
-                Section("家人") {
-                    TextField("家里谁对接？（如：老婆王芳负责收狗/儿子开门）", text: $familyMembers, axis: .vertical)
+                Section(L("Family", "家人")) {
+                    TextField(L("Who answers the door?", "家里谁对接？（如：老婆负责收狗/儿子开门）"), text: $familyMembers, axis: .vertical)
                         .lineLimit(2...3)
                 }
-                Section("偏好与备注") {
-                    TextField("性格、偏好、注意事项…", text: $notes, axis: .vertical)
+                Section(L("Preferences & Notes", "偏好与备注")) {
+                    TextField(L("Temperament, preferences, do-nots…", "性格、偏好、注意事项…"), text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                 }
                 // 内嵌宠物（健哥令⑦）
-                Section("宠物（可顺便录入，也可以后再加）") {
+                Section(L("Pets (add now or later)", "宠物（可顺便录入，也可以后再加）")) {
                     ForEach($pendingPets) { $pet in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                TextField("宠物名字", text: $pet.name)
+                                TextField(L("Pet name", "宠物名字"), text: $pet.name)
                                 Picker("", selection: $pet.type) {
                                     ForEach(PetType.allCases, id: \.self) { t in
-                                        Text("\(t.emoji) \(t.rawValue)").tag(t)
+                                        Text("\(t.emoji) \(t.display)").tag(t)
                                     }
                                 }
                                 .pickerStyle(.menu)
                                 .frame(width: 110)
                             }
-                            TextField("品种", text: $pet.breed)
-                            TextField("美容配方（造型/洗毛精…）", text: $pet.groomRecipe, axis: .vertical)
+                            TextField(L("Breed", "品种"), text: $pet.breed)
+                            TextField(L("Recipe (style/shampoo…)", "美容配方（造型/洗毛精…）"), text: $pet.groomRecipe, axis: .vertical)
                                 .lineLimit(2...4)
                         }
                         .padding(.vertical, 2)
@@ -83,18 +83,18 @@ struct ClientEditor: View {
                     Button {
                         pendingPets.append(PendingPet())
                     } label: {
-                        Label("加一只宠物", systemImage: "plus.circle")
+                        Label(L("Add a Pet", "加一只宠物"), systemImage: "plus.circle")
                     }
                 }
             }
-            .navigationTitle(existing == nil ? "新建客户" : "编辑客户")
+            .navigationTitle(existing == nil ? L("New Client", "新建客户") : L("Edit Client", "编辑客户"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(L("Cancel", "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
+                    Button(L("Save", "保存")) { save() }
                         .disabled(name.isEmpty)
                 }
             }
@@ -211,7 +211,7 @@ struct PetEditor: View {
         NavigationStack {
             Form {
                 // 图片（健哥令⑨）
-                Section("照片") {
+                Section(L("Photo", "照片")) {
                     HStack {
                         if let d = photoData, let ui = UIImage(data: d) {
                             Image(uiImage: ui)
@@ -227,7 +227,7 @@ struct PetEditor: View {
                             .buttonStyle(.bordered)
                         } else {
                             PhotosPicker(selection: $photoItem, matching: .images) {
-                                Label("选照片", systemImage: "photo.badge.plus")
+                                Label(L("Choose Photo", "选照片"), systemImage: "photo.badge.plus")
                             }
                         }
                     }
@@ -246,21 +246,21 @@ struct PetEditor: View {
                         }
                     }
                 }
-                Section("宠物") {
-                    TextField("名字", text: $name)
+                Section(L("Pet", "宠物")) {
+                    TextField(L("Name", "名字"), text: $name)
                     Picker("类型", selection: $type) {
                         ForEach(PetType.allCases, id: \.self) { t in
-                            Text("\(t.emoji) \(t.rawValue)").tag(t)
+                            Text("\(t.emoji) \(t.display)").tag(t)
                         }
                     }
                     if type == .other {
-                        TextField("填类型（如：刺猬/龙猫/猪）", text: $customType)
+                        TextField(L("Type (hedgehog / chinchilla / pig…)", "填类型（如：刺猬/龙猫/猪）"), text: $customType)
                     }
-                    TextField("品种", text: $breed)
+                    TextField(L("Breed", "品种"), text: $breed)
                 }
-                Section("主人") {
+                Section(L("Owner", "主人")) {
                     if data.owners.isEmpty {
-                        Text("请先在「客户」页添加客户。")
+                        Text(L("Add a client first (Clients tab).", "请先在「客户」页添加客户。"))
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
@@ -272,51 +272,51 @@ struct PetEditor: View {
                     }
                 }
                 // 健好令⑦：喜好
-                Section("喜好（沟通时讨好它用）") {
-                    TextField("喜欢吃什么？（鸡肉冻干/小鱼干…）", text: $favoriteFood)
-                    TextField("喜欢怎么摸它？（摸下巴/揉耳朵根…）", text: $favoritePetting)
+                Section(L("Favorites (rapport)", "喜好（沟通时讨好它用）")) {
+                    TextField(L("Favorite treats? (chicken jerky / fish snacks…)", "喜欢吃什么？（鸡肉冻干/小鱼干…）"), text: $favoriteFood)
+                    TextField(L("Where to pet? (chin rubs / ear scratches…)", "喜欢怎么摸它？（摸下巴/揉耳朵根…）"), text: $favoritePetting)
                 }
-                Section("脾气") {
+                Section(L("Temperament", "脾气")) {
                     Picker("咬人风险", selection: $biteLevel) {
-                        Text("安全").tag(0)
-                        Text("谨慎").tag(1)
-                        Text("咬人").tag(2)
+                        Text(L("Safe", "安全")).tag(0)
+                        Text(L("Care", "谨慎")).tag(1)
+                        Text(L("Bites", "咬人")).tag(2)
                     }
                     .pickerStyle(.segmented)
-                    TextField("脾气备注（胆小/认生/需要先遛…）", text: $temperament, axis: .vertical)
+                    TextField(L("Notes (shy / wary / needs a walk first…)", "脾气备注（胆小/认生/需要先遛…）"), text: $temperament, axis: .vertical)
                         .lineLimit(2...4)
                 }
                 // 健哥令⑦：状态标记
-                Section("状态") {
+                Section(L("Status", "状态")) {
                     Picker("当前状态", selection: $status) {
                         ForEach(PetStatus.allCases, id: \.self) { s in
-                            Text(s.rawValue).tag(s)
+                            Text(s.display).tag(s)
                         }
                     }
                 }
-                Section("美容配方") {
-                    TextField("造型 / 刀头 / 洗毛精备注", text: $groomRecipe, axis: .vertical)
+                Section(L("Grooming Recipe", "美容配方")) {
+                    TextField(L("Style / blade / shampoo notes", "造型 / 刀头 / 洗毛精备注"), text: $groomRecipe, axis: .vertical)
                         .lineLimit(4...8)
                 }
-                Section("特殊工具携带") {
-                    TextField("上门要特别带的工具？（大型犬吹水机/猫嘴套…）", text: $specialTools, axis: .vertical)
+                Section(L("Special Tools to Bring", "特殊工具携带")) {
+                    TextField(L("Special tools to bring? (dryer / muzzle…)", "上门要特别带的工具？（大型犬吹水机/猫嘴套…）"), text: $specialTools, axis: .vertical)
                         .lineLimit(2...4)
                 }
-                Section("疫苗") {
-                    Toggle("记录疫苗到期", isOn: $hasVaccine)
+                Section(L("Vaccine", "疫苗")) {
+                    Toggle(L("Track vaccine expiry", "记录疫苗到期"), isOn: $hasVaccine)
                     if hasVaccine {
-                        DatePicker("到期日", selection: $vaccineExpiry, displayedComponents: .date)
+                        DatePicker(L("Expires", "到期日"), selection: $vaccineExpiry, displayedComponents: .date)
                     }
                 }
             }
-            .navigationTitle(existing == nil ? "新建宠物" : "编辑宠物")
+            .navigationTitle(existing == nil ? L("New Pet", "新建宠物") : L("Edit Pet", "编辑宠物"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(L("Cancel", "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
+                    Button(L("Save", "保存")) { save() }
                         .disabled(name.isEmpty || ownerId == nil && !data.owners.isEmpty)
                 }
             }
@@ -386,9 +386,9 @@ struct AppointmentEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("客户（预约对象是人）") {
+                Section(L("Client (people first)", "客户（预约对象是人）")) {
                     if data.owners.isEmpty {
-                        Text("请先在「客户」页添加客户。")
+                        Text(L("Add a client first (Clients tab).", "请先在「客户」页添加客户。"))
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
@@ -404,9 +404,9 @@ struct AppointmentEditor: View {
                         }
                     }
                 }
-                Section("这次服务哪些宠物（可多选）") {
+                Section(L("Pets for this visit (multi-select)", "这次服务哪些宠物（可多选）")) {
                     if ownerPets.isEmpty {
-                        Text("该客户还没有宠物——可在客户详情里加。")
+                        Text(L("No pets yet — add from the client page.", "该客户还没有宠物——可在客户详情里加。"))
                             .font(.footnote)
                             .foregroundColor(.secondary)
                     } else {
@@ -434,24 +434,24 @@ struct AppointmentEditor: View {
                 if let oid = ownerId, let owner = data.owners.first(where: { $0.id == oid }),
                    owner.noShowCount > 0 || ownerPets.reduce(0, { $0 + $1.noShowCount }) > 0 {
                     Section {
-                        Label("有 \(owner.noShowCount + ownerPets.reduce(0) { $0 + $1.noShowCount }) 次没成功记录——建议收押金",
+                        Label(L10n.noShowWarn(owner.noShowCount + ownerPets.reduce(0) { $0 + $1.noShowCount }),
                               systemImage: "exclamationmark.triangle.fill")
                             .font(.footnote)
                             .foregroundColor(.orange)
                     }
                 }
-                Section("时间与时长") {
-                    DatePicker("日期与时间", selection: $date)
+                Section(L("Time & Duration", "时间与时长")) {
+                    DatePicker(L("Date & time", "日期与时间"), selection: $date)
                     // 健哥令③：美容时长可选（不叫"默认"）
                     Picker("美容时长", selection: $minutes) {
-                        Text("45 分钟").tag(45)
-                        Text("60 分钟").tag(60)
-                        Text("90 分钟").tag(90)
-                        Text("120 分钟").tag(120)
-                        Text("150 分钟").tag(150)
-                        Text("180 分钟").tag(180)
+                        Text(L("45 min", "45 分钟")).tag(45)
+                        Text(L("60 min", "60 分钟")).tag(60)
+                        Text(L("90 min", "90 分钟")).tag(90)
+                        Text(L("120 min", "120 分钟")).tag(120)
+                        Text(L("150 min", "150 分钟")).tag(150)
+                        Text(L("180 min", "180 分钟")).tag(180)
                     }
-                    Stepper("车程缓冲 \(buffer) 分钟", value: $buffer, in: 0...60, step: 5)
+                    Stepper(L("Drive buffer \(buffer) min", "车程缓冲 \(buffer) 分钟"), value: $buffer, in: 0...60, step: 5)
                 }
                 // 健哥令⑩-v2：最多三个闹钟，1/2/3/4/6/10小时可选
                 Section {
@@ -466,34 +466,34 @@ struct AppointmentEditor: View {
                         Button {
                             remindSelections.append(120)
                         } label: {
-                            Label("加一个闹钟", systemImage: "plus.circle")
+                            Label(L("Add reminder", "加一个闹钟"), systemImage: "plus.circle")
                         }
                     }
                     if !remindSelections.isEmpty {
                         Button(role: .destructive) {
                             remindSelections = []
                         } label: {
-                            Label("全部清除", systemImage: "trash")
+                            Label(L("Clear all", "全部清除"), systemImage: "trash")
                         }
                     }
                 } header: {
-                    Text("提醒（闹钟，最多3个）")
+                    Text(L("Reminders (up to 3)", "提醒（闹钟，最多3个）"))
                 } footer: {
-                    Text("到点系统通知提醒你出发。最多设3个，如：提前2小时整理工具 + 提前1小时出发。")
+                    Text(L("System notifications remind you when to leave. Up to 3, e.g. 2h before to pack tools + 1h before to leave.", "到点系统通知提醒你出发。最多设3个，如：提前2小时整理工具 + 提前1小时出发。"))
                 }
-                Section("备注") {
-                    TextField("备注（可选）", text: $note, axis: .vertical)
+                Section(L("Notes", "备注")) {
+                    TextField(L("Note (optional)", "备注（可选）"), text: $note, axis: .vertical)
                         .lineLimit(2...4)
                 }
             }
-            .navigationTitle("新建预约")
+            .navigationTitle(L("New Appointment", "新建预约"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(L("Cancel", "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { save() }
+                    Button(L("Save", "保存")) { save() }
                         .disabled(ownerId == nil)
                 }
             }
@@ -552,13 +552,13 @@ struct FeedbackView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("反馈意见") {
+                Section(L("Feedback", "反馈意见")) {
                     TextEditor(text: $feedbackText)
                         .frame(minHeight: 120)
                         .overlay(
                             Group {
                                 if feedbackText.isEmpty {
-                                    Text("用着哪里不顺？缺什么功能？直接写。")
+                                    Text(L("What is clunky? What is missing? Just write it.", "用着哪里不顺？缺什么功能？直接写。"))
                                         .foregroundColor(.secondary)
                                         .font(.footnote)
                                         .padding(.top, 8)
@@ -581,10 +581,10 @@ struct FeedbackView: View {
                     }
                     .disabled(feedbackText.isEmpty)
                 } footer: {
-                    Text("反馈通过邮件直达开发者，不留任何数据在 App 里。")
+                    Text(L("Feedback goes straight to the developer by email. Nothing is stored in the app.", "反馈通过邮件直达开发者，不留任何数据在 App 里。"))
                 }
             }
-            .navigationTitle("我的")
+            .navigationTitle(L("Me", "我的"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
