@@ -689,6 +689,8 @@ struct AppointmentEditor: View {
 import MessageUI
 
 struct FeedbackView: View {
+    /// 重看新手引导回调（健哥 11-19 令：Me 页入口）
+    var replayOnboarding: (() -> Void)? = nil
     @State private var feedbackText = ""
     @State private var showMail = false
     @State private var mailUnavailable = false
@@ -741,6 +743,16 @@ struct FeedbackView: View {
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
+            }
+            // 健哥 11-19 令：新手引导重看入口
+            Section {
+                Button {
+                    replayOnboarding?()
+                } label: {
+                    Label(L("Replay the beginner's guide", "重看新手引导"), systemImage: "questionmark.circle")
+                }
+            } footer: {
+                Text(L("New here? A 4-step quick tour of Today, Clients, Pets and booking.", "第一次用？4步快速过一遍今日/客户/宠物/约单。"))
             }
         }
         .sheet(isPresented: $showMail) {

@@ -63,6 +63,8 @@ enum ReminderScheduler {
 struct RootView: View {
     @State private var data = Store.load()
     @State private var tab = 0
+    // 健哥 11-19 令：新手引导——首启自动弹
+    @State private var showOnboarding = !Onboarding.isDone
 
     var body: some View {
         TabView(selection: $tab) {
@@ -75,11 +77,19 @@ struct RootView: View {
             PetListView(data: $data)
                 .tabItem { Label(L("Pets", "宠物"), systemImage: "pawprint") }
                 .tag(2)
-            FeedbackView()
+            FeedbackView(replayOnboarding: {
+                showOnboarding = true
+            })
                 .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
                 .tag(3)
         }
         .onAppear { data = Store.load() }
+        .fullScreenCover(isPresented: $showOnboarding, onDismiss: { Onboarding.markDone() }) {
+            OnboardingView(onFinish: {
+                Onboarding.markDone()
+                showOnboarding = false
+            })
+        }
     }
 }
 
