@@ -1,6 +1,7 @@
 import SwiftUI
 import ContactsUI
 import PhotosUI
+import MessageUI
 
 // MARK: - 客户编辑器 v3（健哥第二轮⑦：新建客户时下方顺便录宠物；①删门禁密码示例）
 
@@ -19,6 +20,8 @@ struct ClientEditor: View {
 
     // 内嵌宠物录入（健哥令⑦：新建客户页下方顺便加宠物）
     @State private var pendingPets: [PendingPet] = []
+    // 健哥令第七轮③：认领已登记的无主宠物
+    @State private var linkedUnownedIds: Set<UUID> = []
 
     struct PendingPet: Identifiable {
         let id = UUID()
@@ -59,7 +62,7 @@ struct ClientEditor: View {
                     TextField(L("Temperament, preferences, do-nots…", "性格、偏好、注意事项…"), text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                 }
-                // 内嵌宠物（健哥令⑦）
+                // 内嵌宠物（健哥令⑦）+ 认领无主宠物（第七轮③）
                 Section(L("Pets (add now or later)", "宠物（可顺便录入，也可以后再加）")) {
                     ForEach($pendingPets) { $pet in
                         VStack(alignment: .leading, spacing: 8) {
@@ -86,6 +89,8 @@ struct ClientEditor: View {
                         Label(L("Add a Pet", "加一只宠物"), systemImage: "plus.circle")
                     }
                 }
+                // 健哥令第七轮③：已登记宠物选择（有主置灰/无主可认领）
+                PetLinkPicker(data: $data, selectedUnownedIds: $linkedUnownedIds, forOwnerId: existing?.id)
             }
             .navigationTitle(existing == nil ? L("New Client", "新建客户") : L("Edit Client", "编辑客户"))
             .navigationBarTitleDisplayMode(.inline)
@@ -138,6 +143,10 @@ struct ClientEditor: View {
             data.pets.append(Pet(name: pp.name, type: pp.type, breed: pp.breed, weightKg: pp.weight,
                                  ownerId: savedOwner.id, groomRecipe: pp.groomRecipe))
         }
+        // 认领的无主宠物改挂本客户（第七轮③）
+        for i in data.pets.indices where linkedUnownedIds.contains(data.pets[i].id) {
+            data.pets[i].ownerId = savedOwner.id
+        }
         Store.save(data)
         dismiss()
     }
@@ -181,6 +190,85 @@ struct ContactPicker: UIViewControllerRepresentable {
     }
 }
 
+// MARK: - 宠物认领选择器（健哥令第七轮③④：新增客户/加宠物时可选择已登记的无主宠物）
+// 规则：有主的宠物列出但置灰不可选（字体偏灰）；无主宠物可选（字体色深）。
+
+struct PetLinkPicker: View {
+    @Binding var data: Store.Data
+    /// 本次决定认领的无主宠物 id 集合（父视图保存时改 ownerId）
+    @Binding var selectedUnownedIds: Set<UUID>
+    /// 正在为哪个客户操作（已属此人的宠物不显示在此，显示在其主人名下）
+    let forOwnerId: UUID?
+
+    private var unowned: [Pet] {
+        data.pets.filter { $0.ownerId != forOwnerId }.filter { pet in
+            // 无主判定：ownerId 在 owners 里找不到对应客户 = 无主（历史遗留/宠物页先建的）
+            !data.owners.contains(where: { $0.id == pet.ownerId })
+        }
+    }
+
+    private var ownedByOthers: [Pet] {
+        data.pets.filter { pet in
+            if pet.ownerId == forOwnerId { return false }
+            return data.owners.contains(where: { $0.id == pet.ownerId })
+        }
+    }
+
+    var body: some View {
+        Group {
+            if unowned.isEmpty && ownedByOthers.isEmpty {
+                EmptyView()
+            } else {
+                // 无主宠物：可选（色深）
+                if !unowned.isEmpty {
+                    Section(L("Unregistered owner — link one", "无主宠物——可认领")) {
+                        ForEach(unowned) { pet in
+                            Button {
+                                if selectedUnownedIds.contains(pet.id) {
+                                    selectedUnownedIds.remove(pet.id)
+                                } else {
+                                    selectedUnownedIds.insert(pet.id)
+                                }
+                            } label: {
+                                HStack {
+                                    Text("\(pet.type.emoji) \(pet.name)")
+                                        .foregroundColor(.primary)   // 色深=可选
+                                    Spacer()
+                                    if selectedUnownedIds.contains(pet.id) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text(L("These pets have no client yet — select to make this client their owner.", "这些宠物还没归属客户——选中后归到本客户名下。"))
+                    }
+                }
+                // 有主宠物：置灰不可选
+                if !ownedByOthers.isEmpty {
+                    Section(L("Already have an owner", "已有主人（不可选）")) {
+                        ForEach(ownedByOthers) { pet in
+                            HStack {
+                                Text("\(pet.type.emoji) \(pet.name)")
+                                    .foregroundColor(.gray)   // 偏灰=不可选
+                                Spacer()
+                                if let ownerName = data.owners.first(where: { $0.id == pet.ownerId })?.name {
+                                    Text(ownerName)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text(L("Pets already belong to another client and can't be selected. Use \"Add a Pet\" to create a new one.", "这些宠物已属于其他客户，不可选。要加新的请用下方\"新增宠物\"。"))
+                    }
+                }
+            }
+        }
+    }
+}
+
 // MARK: - 宠物编辑器 v3（④兔鸟→马 ③时长可选 ⑦喜好+状态 ⑨图片）
 
 struct PetEditor: View {
@@ -206,10 +294,42 @@ struct PetEditor: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var hasVaccine = false
     @State private var vaccineExpiry = Date()
+    // 健哥令第七轮④：客户详情/宠物页加宠物时，可改为认领无主宠物（选中后本表单只做认领）
+    @State private var claimUnownedId: UUID?
+
+    /// 全库无主宠物（ownerId 无对应客户）
+    private var unownedPets: [Pet] {
+        guard existing == nil else { return [] }   // 编辑已有宠物时不出现认领
+        return data.pets.filter { pet in
+            pet.ownerId != presetOwnerId && !data.owners.contains(where: { $0.id == pet.ownerId })
+        }
+    }
 
     var body: some View {
         NavigationStack {
             Form {
+                // 健哥令第七轮④：先选——认领已有的无主宠物（选中即跳过新建表单）
+                if !unownedPets.isEmpty {
+                    Section(L("Link a registered pet (no owner)", "认领已登记的无主宠物")) {
+                        ForEach(unownedPets) { pet in
+                            Button {
+                                claimUnownedId = (claimUnownedId == pet.id) ? nil : pet.id
+                            } label: {
+                                HStack {
+                                    Text("\(pet.type.emoji) \(pet.name)")
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if claimUnownedId == pet.id {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.orange)
+                                    }
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text(L("Selecting a pet above will re-link it to this client instead of creating a new one (fill the owner below).", "选中上面的宠物后保存=把它归到所选客户名下，不再新建。"))
+                    }
+                }
                 // 图片（健哥令⑨）
                 Section(L("Photo", "照片")) {
                     HStack {
@@ -339,6 +459,14 @@ struct PetEditor: View {
 
     private func save() {
         guard let oid = ownerId else { return }
+        // 健哥令第七轮④：认领模式——把无主宠物改挂所选客户，不新建
+        if let claimId = claimUnownedId,
+           let i = data.pets.firstIndex(where: { $0.id == claimId }) {
+            data.pets[i].ownerId = oid
+            Store.save(data)
+            dismiss()
+            return
+        }
         if var p = existing {
             if let i = data.pets.firstIndex(where: { $0.id == p.id }) {
                 p.name = name; p.type = type; p.breed = breed; p.weightKg = weight; p.ownerId = oid
@@ -392,15 +520,25 @@ struct AppointmentEditor: View {
                             .font(.footnote)
                             .foregroundColor(.orange)
                     } else {
-                        Picker(L("Client", "客户"), selection: $ownerId) {
+                        // 健哥令第七轮⑤：换客户时宠物列表必须跟随——自定义 Binding 在 set 时同步清选，
+                        // 不依赖 onChange 时序（iOS16 单参签名换值偶发不触发）
+                        Picker(L("Client", "客户"), selection: Binding(
+                            get: { ownerId },
+                            set: { nv in
+                                let changed = nv != ownerId
+                                ownerId = nv
+                                if changed {
+                                    selectedPetIds = []
+                                    if let oid = nv,
+                                       let p = data.pets.first(where: { $0.ownerId == oid }) {
+                                        minutes = p.defaultMinutes
+                                    }
+                                }
+                            }
+                        )) {
                             ForEach(data.owners) { o in
                                 Text(o.name).tag(Optional(o.id))
                             }
-                        }
-                        .onChange(of: ownerId) { nv in
-                            // 换客户时清空已选宠物
-                            selectedPetIds = []
-                            if let p = ownerPets.first { minutes = p.defaultMinutes }
                         }
                     }
                 }
@@ -456,7 +594,7 @@ struct AppointmentEditor: View {
                 // 健哥令⑩-v2：最多三个闹钟，1/2/3/4/6/10小时可选
                 Section {
                     ForEach(remindSelections.indices, id: \.self) { idx in
-                        Picker("闹钟 \(idx + 1)", selection: $remindSelections[idx]) {
+                        Picker(L("Reminder \(idx + 1)", "闹钟 \(idx + 1)"), selection: $remindSelections[idx]) {
                             ForEach(Appointment.remindOptions, id: \.self) { mins in
                                 Text(label(mins)).tag(mins)
                             }
@@ -520,7 +658,8 @@ struct AppointmentEditor: View {
     }
 
     private func label(_ mins: Int) -> String {
-        mins >= 60 ? "提前 \(mins / 60) 小时" : "提前 \(mins) 分钟"
+        // 第七轮②：英文版闹钟选项双语（原为裸中文）
+        mins >= 60 ? L("\(mins / 60) h before", "提前 \(mins / 60) 小时") : L("\(mins) min before", "提前 \(mins) 分钟")
     }
 
     private func save() {
@@ -538,54 +677,105 @@ struct AppointmentEditor: View {
         // 闹钟（健哥令⑩-v2 多闹钟；编辑后重排）
         ReminderScheduler.schedule(appointment: appt,
                                    ownerName: data.owners.first(where: { $0.id == oid })?.name ?? "",
-                                   petNames: data.pets.filter { selectedPetIds.contains($0.id) }.map { $0.name }.joined(separator: "和"))
+                                   petNames: data.pets.filter { selectedPetIds.contains($0.id) }.map { $0.name }.joined(separator: AppLang.current == .en ? " & " : "和"))
         dismiss()
     }
 }
 
-// MARK: - 反馈页 v3（健哥令⑤：加返回键/导航结构修正）
+// MARK: - 反馈页 v4（健哥令第七轮：①返回=tab结构可切走+顶部说明 ⑦道歉文案 ①%20根修=MessageUI原生邮件）
+// %20 根因：mail body 走 URL percent-encoding，邮件 App 把转义序列当字面显示。
+// 根修=MFMailComposeViewController 原生邮件草稿，正文直传字符串零转义。
+
+import MessageUI
 
 struct FeedbackView: View {
     @State private var feedbackText = ""
-    @State private var sent = false
+    @State private var showMail = false
+    @State private var mailUnavailable = false
 
     var body: some View {
-        NavigationStack {
-            Form {
-                Section(L("Feedback", "反馈意见")) {
-                    TextEditor(text: $feedbackText)
-                        .frame(minHeight: 120)
-                        .overlay(
-                            Group {
-                                if feedbackText.isEmpty {
-                                    Text(L("What is clunky? What is missing? Just write it.", "用着哪里不顺？缺什么功能？直接写。"))
-                                        .foregroundColor(.secondary)
-                                        .font(.footnote)
-                                        .padding(.top, 8)
-                                        .allowsHitTesting(false)
-                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                                }
+        Form {
+            Section(L("Feedback", "反馈意见")) {
+                TextEditor(text: $feedbackText)
+                    .frame(minHeight: 120)
+                    .overlay(
+                        Group {
+                            if feedbackText.isEmpty {
+                                Text(L("What is clunky? What is missing? Just write it.", "用着哪里不顺？缺什么功能？直接写。"))
+                                    .foregroundColor(.secondary)
+                                    .font(.footnote)
+                                    .padding(.top, 8)
+                                    .allowsHitTesting(false)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                             }
-                        )
-                }
-                Section {
-                    Button {
-                        let subject = "宠物美容台账-用户反馈"
-                        let body = feedbackText.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                        if let url = URL(string: "mailto:zeronelabs.dev@gmail.com?subject=\(subject)&body=\(body)") {
-                            UIApplication.shared.open(url)
-                            sent = true
                         }
-                    } label: {
-                        Label(sent ? "已打开邮件——发送即完成反馈" : "发送反馈（走你的邮件）", systemImage: "paperplane.fill")
+                    )
+            }
+            Section {
+                Button {
+                    if MFMailComposeViewController.canSendMail() {
+                        showMail = true
+                    } else {
+                        // 未配系统邮件账户：退回 mailto 直跳（仍比无响应好）
+                        let subject = "GroomerBook Feedback".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+                        let body = feedbackText.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+                        if let url = URL(string: "mailto:zerone348@gmail.com?subject=\(subject)&body=\(body)") {
+                            UIApplication.shared.open(url)
+                        }
+                        mailUnavailable = true
                     }
-                    .disabled(feedbackText.isEmpty)
-                } footer: {
-                    Text(L("Feedback goes straight to the developer by email. Nothing is stored in the app.", "反馈通过邮件直达开发者，不留任何数据在 App 里。"))
+                } label: {
+                    Label(L("Send Feedback by Email", "发送反馈（走你的邮件）"), systemImage: "paperplane.fill")
+                }
+                .disabled(feedbackText.isEmpty)
+            } header: {
+                Text(L("Me", "我的"))
+            } footer: {
+                // 健哥令第七轮⑦：道歉+欢迎新功能想法（上架英文版）
+                Text(L("Sorry for any trouble! Please tell the developer what's not working — it will be fixed as soon as possible. New feature ideas are also very welcome, so the app can serve you better.\n\nFeedback goes straight to the developer by email. Nothing is stored in the app. To go back, just switch tabs at the bottom.",
+                       "若有使用不便十分抱歉，请把具体问题反馈给开发者，会尽快修改。若有新功能想法，也可以告知，让开发者更好服务。\n\n反馈通过邮件直达开发者，不留任何数据在 App 里。返回请点底部标签切换。"))
+            }
+            if mailUnavailable {
+                Section {
+                    Label(L("No system Mail account found — the Mail app opened instead. If nothing happened, email zerone348@gmail.com directly.", "未检测到系统邮件账户——已尝试跳转邮件。若没反应，请直接发邮件到 zerone348@gmail.com"), systemImage: "info.circle")
+                        .font(.footnote)
+                        .foregroundColor(.secondary)
                 }
             }
-            .navigationTitle(L("Me", "我的"))
-            .navigationBarTitleDisplayMode(.inline)
+        }
+        .sheet(isPresented: $showMail) {
+            MailComposer(
+                to: "zerone348@gmail.com",
+                subject: "GroomerBook Feedback",
+                body: feedbackText
+            )
+            .ignoresSafeArea()
+        }
+    }
+}
+
+/// 系统邮件编辑器（正文原生直传，零 %20 转义）
+struct MailComposer: UIViewControllerRepresentable {
+    let to: String
+    let subject: String
+    let body: String
+
+    func makeUIViewController(context: Context) -> MFMailComposeViewController {
+        let vc = MFMailComposeViewController()
+        vc.mailComposeDelegate = context.coordinator
+        vc.setToRecipients([to])
+        vc.setSubject(subject)
+        vc.setMessageBody(body, isHTML: false)
+        return vc
+    }
+
+    func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    class Coordinator: NSObject, MFMailComposeDelegate {
+        func mailComposeController(_ controller: MFMailComposeViewController,
+                                   didFinishWith result: MFMailComposeResult, error: Error?) {
+            controller.dismiss(animated: true)
         }
     }
 }

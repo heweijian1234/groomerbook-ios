@@ -1,0 +1,27 @@
+budget en-US: subtitle=30/30 keywords=93/100 OK
+budget ja: subtitle=11/30 keywords=37/100 OK
+budget de-DE: subtitle=27/30 keywords=83/100 OK
+budget fr-FR: subtitle=23/30 keywords=80/100 OK
+budget es-ES: subtitle=22/30 keywords=80/100 OK
+budget zh-Hans: subtitle=11/30 keywords=47/100 OK
+budget zh-Hant: subtitle=11/30 keywords=47/100 OK
+[1] 版本 1.0 id=80e8c62f-5a46-489e-a350-20baf1e64423 state=PREPARE_FOR_SUBMISSION
+[2] App信息 en-US: OK
+[2] App信息 ja: OK
+[2] App信息 de-DE: OK
+[2] App信息 fr-FR: OK
+[2] App信息 es-ES: OK
+[2] App信息 zh-Hans: OK
+[2] App信息 zh-Hant: OK
+[3] 版本文案 en-US: OK
+[3] 版本文案 ja: OK
+[3] 版本文案 de-DE: OK
+[3] 版本文案 fr-FR: OK
+[3] 版本文案 es-ES: OK
+[3] 版本文案 zh-Hans: OK
+[3] 版本文案 zh-Hant: OK
+[4] 截图集 fa2f147c-3625-412e-946e-8a289c7d703a
+  shot1: OK
+  shot2: OK
+  shot3: OK
+[5] 完成——网页剩：版权/隐私标签/定价供应/审核联系人（API 先做 build 关联/类别/分级）

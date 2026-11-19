@@ -241,14 +241,15 @@ enum MessageTemplate {
     }
 }
 
-// MARK: - 导出（健哥令⑧：单客户/全量导出成文件）
+// MARK: - 导出（健哥令⑧：单客户/全量导出成文件；第七轮②双语）
 
 enum Exporter {
-    /// 生成导出文本（单客户带宠物+预约；全量=全部）
+    /// 生成导出文本（单客户带宠物+预约；全量=全部）。语言跟随 AppLang（上架英文版=英文导出）
     static func makeText(data: Store.Data, ownerFilter: UUID? = nil) -> String {
+        let en = AppLang.current == .en
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd HH:mm"
-        df.locale = Locale(identifier: "zh_CN")
+        df.locale = Locale(identifier: en ? "en_US" : "zh_CN")
         var lines: [String] = []
         let owners: [Owner]
         if let filter = ownerFilter {
@@ -257,40 +258,41 @@ enum Exporter {
             owners = data.owners
         }
 
-        lines.append("宠物美容台账 导出 · \(df.string(from: Date()))")
+        lines.append(en ? "GroomerBook Export · \(df.string(from: Date()))" : "宠物美容台账 导出 · \(df.string(from: Date()))")
         lines.append(String(repeating: "=", count: 40))
         for owner in owners {
             lines.append("")
-            lines.append("【客户】\(owner.name)")
-            if !owner.phone.isEmpty { lines.append("电话：\(owner.phone)") }
-            if !owner.email.isEmpty { lines.append("邮箱：\(owner.email)") }
-            if !owner.address.isEmpty { lines.append("地址：\(owner.address)") }
-            if !owner.familyMembers.isEmpty { lines.append("家人：\(owner.familyMembers)") }
-            if !owner.notes.isEmpty { lines.append("备注：\(owner.notes)") }
+            lines.append(en ? "[Client] \(owner.name)" : "【客户】\(owner.name)")
+            if !owner.phone.isEmpty { lines.append(en ? "Phone: \(owner.phone)" : "电话：\(owner.phone)") }
+            if !owner.email.isEmpty { lines.append(en ? "Email: \(owner.email)" : "邮箱：\(owner.email)") }
+            if !owner.address.isEmpty { lines.append(en ? "Address: \(owner.address)" : "地址：\(owner.address)") }
+            if !owner.familyMembers.isEmpty { lines.append(en ? "Family: \(owner.familyMembers)" : "家人：\(owner.familyMembers)") }
+            if !owner.notes.isEmpty { lines.append(en ? "Notes: \(owner.notes)" : "备注：\(owner.notes)") }
             let pets = data.pets.filter { $0.ownerId == owner.id }
             if !pets.isEmpty {
-                lines.append("-- 宠物（\(pets.count)）--")
+                lines.append(en ? "-- Pets (\(pets.count)) --" : "-- 宠物（\(pets.count)）--")
                 for p in pets {
-                    var l = "\(p.type.emoji) \(p.name)（\(p.type.rawValue)·\(p.breed)·\(p.status.rawValue)）"
-                    if p.biteLevel > 0 { l += " 咬人风险:\(["安全","谨慎","咬人"][p.biteLevel])" }
+                    let biteWords = en ? ["safe", "care", "bites"] : ["安全", "谨慎", "咬人"]
+                    var l = "\(p.type.emoji) \(p.name)（\(p.type.display)·\(p.breed)·\(p.status.display)）"
+                    if p.biteLevel > 0 { l += en ? " bite risk: \(biteWords[p.biteLevel])" : " 咬人风险:\(biteWords[p.biteLevel])" }
                     lines.append(l)
-                    if !p.groomRecipe.isEmpty { lines.append("  配方：\(p.groomRecipe)") }
-                    if !p.specialTools.isEmpty { lines.append("  特殊工具：\(p.specialTools)") }
-                    if !p.favoriteFood.isEmpty { lines.append("  爱吃：\(p.favoriteFood)") }
-                    if !p.favoritePetting.isEmpty { lines.append("  爱摸：\(p.favoritePetting)") }
-                    if !p.temperament.isEmpty { lines.append("  脾气：\(p.temperament)") }
+                    if !p.groomRecipe.isEmpty { lines.append(en ? "  Recipe: \(p.groomRecipe)" : "  配方：\(p.groomRecipe)") }
+                    if !p.specialTools.isEmpty { lines.append(en ? "  Special tools: \(p.specialTools)" : "  特殊工具：\(p.specialTools)") }
+                    if !p.favoriteFood.isEmpty { lines.append(en ? "  Loves to eat: \(p.favoriteFood)" : "  爱吃：\(p.favoriteFood)") }
+                    if !p.favoritePetting.isEmpty { lines.append(en ? "  Loves petting: \(p.favoritePetting)" : "  爱摸：\(p.favoritePetting)") }
+                    if !p.temperament.isEmpty { lines.append(en ? "  Temperament: \(p.temperament)" : "  脾气：\(p.temperament)") }
                 }
             }
             let appts = data.appointments.filter { $0.ownerId == owner.id }.sorted { $0.date > $1.date }
             if !appts.isEmpty {
-                lines.append("-- 上门记录（\(appts.count)）--")
+                lines.append(en ? "-- Visit History (\(appts.count)) --" : "-- 上门记录（\(appts.count)）--")
                 for a in appts {
-                    let petNames = a.petIds.compactMap { id in data.pets.first { $0.id == id }?.name }.joined(separator: "和")
-                    var l = "  \(df.string(from: a.date)) \(petNames) \(a.status.rawValue) \(a.groomMinutes)分钟"
+                    let petNames = a.petIds.compactMap { id in data.pets.first { $0.id == id }?.name }.joined(separator: en ? " & " : "和")
+                    var l = "  \(df.string(from: a.date)) \(petNames) \(a.status.display) \(a.groomMinutes)\(en ? " min" : "分钟")"
                     if !a.remindMinutesList.isEmpty {
-                        l += " · 闹钟\(a.remindMinutesList.count)个"
+                        l += en ? " · \(a.remindMinutesList.count) reminder(s)" : " · 闹钟\(a.remindMinutesList.count)个"
                     }
-                    if !a.note.isEmpty { l += " · 备注：\(a.note)" }
+                    if !a.note.isEmpty { l += en ? " · Note: \(a.note)" : " · 备注：\(a.note)" }
                     lines.append(l)
                 }
             }
@@ -298,7 +300,8 @@ enum Exporter {
         if ownerFilter == nil {
             lines.append("")
             lines.append(String(repeating: "=", count: 40))
-            lines.append("合计：客户\(data.owners.count) · 宠物\(data.pets.count) · 上门\(data.appointments.count)次")
+            lines.append(en ? "Total: \(data.owners.count) clients · \(data.pets.count) pets · \(data.appointments.count) visits"
+                            : "合计：客户\(data.owners.count) · 宠物\(data.pets.count) · 上门\(data.appointments.count)次")
         }
         return lines.joined(separator: "\n")
     }

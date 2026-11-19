@@ -37,6 +37,7 @@ enum ReminderScheduler {
             content.body = AppLang.current == .en
                 ? "\(hoursText(mins)) - heading to " + ownerName + "\u{2019}s place (" + petNames + ")." + (mins >= 120 ? " Pack your tools." : "")
                 : "\(hoursText(mins))出发去 \(ownerName) 家（\(petNames)）。\(mins >= 120 ? "记得带齐工具。" : "")"
+            // 注：中文分支为历史测试版保留；上架英文版走 en 分支
             content.sound = .default
 
             let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
@@ -198,8 +199,14 @@ struct TodayView: View {
 
     private var groupedByDay: [(String, [Appointment])] {
         let df = DateFormatter()
-        df.dateFormat = "M月d日 EEEE"
-        df.locale = Locale(identifier: "zh_CN")
+        // 第七轮②：语言统一——英文版走英文 locale（"Nov 20 Friday"），中文测试版保留中文
+        if AppLang.current == .en {
+            df.dateFormat = "MMM d EEEE"
+            df.locale = Locale(identifier: "en_US")
+        } else {
+            df.dateFormat = "M月d日 EEEE"
+            df.locale = Locale(identifier: "zh_CN")
+        }
         let groups = Dictionary(grouping: data.appointments.filter { $0.status == .scheduled }.sorted { $0.date < $1.date }) {
             df.string(from: $0.date)
         }
@@ -268,6 +275,30 @@ struct TodayVisitCard: View {
                     .font(.caption)
                     .foregroundColor(.orange)
             }
+            // 健哥令第七轮⑥：今日卡也带注意事项（客户备注/宠物脾气咬人/预约备注）
+            if !owner.notes.isEmpty {
+                Label(L("Client note", "客户备注") + ": " + owner.notes, systemImage: "person.crop.square.and.at.rectangle")
+                    .font(.caption)
+                    .foregroundColor(.purple)
+            }
+            ForEach(pets, id: \.id) { p in
+                let bits: [String] = [
+                    p.biteLevel == 2 ? L("BITES", "咬人") : nil,
+                    p.biteLevel == 1 ? L("handle with care", "谨慎") : nil,
+                    p.temperament.isEmpty ? nil : p.temperament,
+                    p.status == .sick ? L("sick", "生病中") : nil
+                ].compactMap { $0 }
+                if !bits.isEmpty {
+                    Label("\(p.type.emoji)\(p.name): " + bits.joined(separator: " · "), systemImage: "pawprint")
+                        .font(.caption)
+                        .foregroundColor(.orange)
+                }
+            }
+            if !appt.note.isEmpty {
+                Label(appt.note, systemImage: "note.text")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
             // 健哥令第五轮①：在路上短信已删——换编辑入口
             HStack {
                 Spacer()
@@ -296,20 +327,40 @@ struct AppointmentRow: View {
     var noShowWarn: String? {
         guard let owner else { return nil }
         let petCount = pets.reduce(0) { $0 + $1.noShowCount }
-        return (owner.noShowCount + petCount) > 0 ? "有 \(owner.noShowCount + petCount) 次没成功记录——建议收押金" : nil
+        return (owner.noShowCount + petCount) > 0 ? L10n.noShowWarn(owner.noShowCount + petCount) : nil
+    }
+
+    /// 健哥令第七轮⑥：订单注意事项聚合——客户备注/宠物注意事项/特殊工具
+    var clientNote: String? {
+        guard let o = owner, !o.notes.isEmpty else { return nil }
+        return o.notes
+    }
+    var petNotes: [String] {
+        pets.compactMap { p -> String? in
+            var bits: [String] = []
+            if p.biteLevel == 2 { bits.append(L("BITES", "咬人")) }
+            else if p.biteLevel == 1 { bits.append(L("handle with care", "谨慎")) }
+            if !p.temperament.isEmpty { bits.append(p.temperament) }
+            if p.status == .sick { bits.append(L("sick", "生病中")) }
+            guard !bits.isEmpty else { return nil }
+            return "\(p.type.emoji)\(p.name): " + bits.joined(separator: " · ")
+        }
+    }
+    var toolNotes: [String] {
+        pets.map { $0.specialTools }.filter { !$0.isEmpty }
     }
 
     var tf: DateFormatter {
         let f = DateFormatter()
         f.timeStyle = .short
-        f.locale = Locale(identifier: "zh_CN")
+        f.locale = Locale(identifier: AppLang.current == .en ? "en_US" : "zh_CN")
         return f
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(owner?.name ?? "未知客户")
+                Text(owner?.name ?? L("Unknown client", "未知客户"))
                     .font(.headline)
                 Spacer()
                 Text(tf.string(from: appt.date))
@@ -317,17 +368,37 @@ struct AppointmentRow: View {
                     .foregroundColor(.secondary)
             }
             if !pets.isEmpty {
-                Text(pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " ") + " · \(appt.groomMinutes)分钟 · 缓冲\(appt.driveBufferMinutes)分钟")
+                Text(pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " ")
+                     + " · \(appt.groomMinutes) " + L("min", "分钟")
+                     + " · " + L("buffer \(appt.driveBufferMinutes) min", "缓冲\(appt.driveBufferMinutes)分钟"))
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
             if !appt.remindMinutesList.isEmpty {
-                let labels = appt.remindMinutesList.sorted().map { mins in
-                    mins >= 60 ? "提前\(mins / 60)小时" : "提前\(mins)分钟"
-                }.joined(separator: "、")
-                Label(labels + "提醒", systemImage: "bell.fill")
+                Label(L10n.remindLabel(appt.remindMinutesList), systemImage: "bell.fill")
                     .font(.caption)
                     .foregroundColor(.blue)
+            }
+            // 健哥令第七轮⑥：注意事项三线（有则显示）
+            if let cn = clientNote {
+                Label(L("Client note", "客户备注") + ": " + cn, systemImage: "person.crop.square.and.at.rectangle")
+                    .font(.caption)
+                    .foregroundColor(.purple)
+            }
+            ForEach(petNotes, id: \.self) { note in
+                Label(note, systemImage: "pawprint")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            if !toolNotes.isEmpty {
+                Label(L10n.toolsNeeded(toolNotes), systemImage: "suitcase.cart")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+            }
+            if !appt.note.isEmpty {
+                Label(appt.note, systemImage: "note.text")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             if let warn = noShowWarn {
                 Label(warn, systemImage: "exclamationmark.triangle.fill")
@@ -413,7 +484,7 @@ struct ClientListView: View {
                                     }
                                     HStack(spacing: 8) {
                                         let pets = data.pets.filter { $0.ownerId == owner.id }
-                                        Text(pets.isEmpty ? "无宠物" : pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " "))
+                                        Text(pets.isEmpty ? L("No pets", "无宠物") : pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " "))
                                             .font(.caption)
                                             .foregroundColor(.secondary)
                                         if !owner.address.isEmpty {
@@ -513,7 +584,7 @@ struct ClientDetailView: View {
                         .foregroundColor(.orange)
                 }
             }
-            Section(L10n.countHeader("Pets", "宠物", myPets.count)) {
+            Section(L10n.countHeader("宠物", "Pets", myPets.count)) {
                 if myPets.isEmpty {
                     Text(L("No pets yet — use the menu (top right)", "还没有宠物——右上角菜单添加")).font(.footnote).foregroundColor(.secondary)
                 } else {
@@ -745,7 +816,7 @@ struct PetDetailView: View {
                 HStack {
                     Text(L("Bite risk", "咬人风险"))
                     Spacer()
-                    Text(["安全", "谨慎", "咬人"][current.biteLevel])
+                    Text([L("Safe", "安全"), L("Care", "谨慎"), L("Bites", "咬人")][current.biteLevel])
                         .foregroundColor(current.biteLevel == 2 ? .red : current.biteLevel == 1 ? .orange : .green)
                 }
                 if let exp = current.vaccineExpiry {
