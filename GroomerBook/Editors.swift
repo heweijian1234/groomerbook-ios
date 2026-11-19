@@ -221,7 +221,7 @@ struct PetLinkPicker: View {
             } else {
                 // 无主宠物：可选（色深）
                 if !unowned.isEmpty {
-                    Section(L("Unregistered owner — link one", "无主宠物——可认领")) {
+                    Section {
                         ForEach(unowned) { pet in
                             Button {
                                 if selectedUnownedIds.contains(pet.id) {
@@ -241,13 +241,15 @@ struct PetLinkPicker: View {
                                 }
                             }
                         }
+                    } header: {
+                        Text(L("Unregistered owner — link one", "无主宠物——可认领"))
                     } footer: {
                         Text(L("These pets have no client yet — select to make this client their owner.", "这些宠物还没归属客户——选中后归到本客户名下。"))
                     }
                 }
                 // 有主宠物：置灰不可选
                 if !ownedByOthers.isEmpty {
-                    Section(L("Already have an owner", "已有主人（不可选）")) {
+                    Section {
                         ForEach(ownedByOthers) { pet in
                             HStack {
                                 Text("\(pet.type.emoji) \(pet.name)")
@@ -260,6 +262,8 @@ struct PetLinkPicker: View {
                                 }
                             }
                         }
+                    } header: {
+                        Text(L("Already have an owner", "已有主人（不可选）"))
                     } footer: {
                         Text(L("Pets already belong to another client and can't be selected. Use \"Add a Pet\" to create a new one.", "这些宠物已属于其他客户，不可选。要加新的请用下方\"新增宠物\"。"))
                     }
@@ -310,7 +314,7 @@ struct PetEditor: View {
             Form {
                 // 健哥令第七轮④：先选——认领已有的无主宠物（选中即跳过新建表单）
                 if !unownedPets.isEmpty {
-                    Section(L("Link a registered pet (no owner)", "认领已登记的无主宠物")) {
+                    Section {
                         ForEach(unownedPets) { pet in
                             Button {
                                 claimUnownedId = (claimUnownedId == pet.id) ? nil : pet.id
@@ -326,6 +330,8 @@ struct PetEditor: View {
                                 }
                             }
                         }
+                    } header: {
+                        Text(L("Link a registered pet (no owner)", "认领已登记的无主宠物"))
                     } footer: {
                         Text(L("Selecting a pet above will re-link it to this client instead of creating a new one (fill the owner below).", "选中上面的宠物后保存=把它归到所选客户名下，不再新建。"))
                     }
@@ -685,8 +691,7 @@ struct AppointmentEditor: View {
 // MARK: - 反馈页 v4（健哥令第七轮：①返回=tab结构可切走+顶部说明 ⑦道歉文案 ①%20根修=MessageUI原生邮件）
 // %20 根因：mail body 走 URL percent-encoding，邮件 App 把转义序列当字面显示。
 // 根修=MFMailComposeViewController 原生邮件草稿，正文直传字符串零转义。
-
-import MessageUI
+// （import MessageUI 已在文件顶部——CI 教训：import 不能放文件中段）
 
 struct FeedbackView: View {
     /// 重看新手引导回调（健哥 11-19 令：Me 页入口）
@@ -751,6 +756,8 @@ struct FeedbackView: View {
                 } label: {
                     Label(L("Replay the beginner's guide", "重看新手引导"), systemImage: "questionmark.circle")
                 }
+            } header: {
+                Text(L("Help", "帮助"))
             } footer: {
                 Text(L("New here? A 4-step quick tour of Today, Clients, Pets and booking.", "第一次用？4步快速过一遍今日/客户/宠物/约单。"))
             }
