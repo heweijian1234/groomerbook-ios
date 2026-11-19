@@ -791,7 +791,7 @@ struct MailComposer: UIViewControllerRepresentable {
     func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
     func makeCoordinator() -> Coordinator { Coordinator() }
 
-    class Coordinator: NSObject, MFMailComposeDelegate {
+    class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
         func mailComposeController(_ controller: MFMailComposeViewController,
                                    didFinishWith result: MFMailComposeResult, error: Error?) {
             controller.dismiss(animated: true)
