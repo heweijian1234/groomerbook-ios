@@ -23,8 +23,8 @@ enum ReminderScheduler {
         cancel(appointmentId: appointment.id)
         guard appointment.status == .scheduled else { return }
 
-        // (闹钟时间, 锁屏标题, 正文)
-        let alarms: [(date: Date, title: String, body: String)] = [
+        // (闹钟时间, 锁屏标题, 正文)——时间全 Optional（没开=不排）
+        let alarms: [(date: Date?, title: String, body: String)] = [
             (appointment.prepAlarm,
              L("Start-prep reminder", "准备出发提醒"),
              L("Time to pack tools for \(ownerName)'s visit (\(petNames)).", "收拾工具出发——今天要去 \(ownerName) 家（\(petNames)）。")),
