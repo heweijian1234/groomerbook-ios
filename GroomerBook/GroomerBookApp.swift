@@ -14,42 +14,41 @@ struct GroomerBookApp: App {
     }
 }
 
-// MARK: - 本地通知（健哥令⑩：预约闹钟）
+// MARK: - 本地通知（健哥令⑩：预约闹钟；11-20令⑤：三种自由时间闹钟，锁屏显示闹钟名）
 
 enum ReminderScheduler {
-    /// 预约闹钟（健哥令⑩-v2：最多3个提醒，[60,120,180]式分钟数组）
+    /// 三闹钟调度（健哥11-20令⑤：开始准备/最晚出发/结束提醒——用户自由设时间点）
     static func schedule(appointment: Appointment, ownerName: String, petNames: String) {
         let center = UNUserNotificationCenter.current()
-        // 先取消旧的
         cancel(appointmentId: appointment.id)
         guard appointment.status == .scheduled else { return }
 
-        let hoursText = { (mins: Int) -> String in
-            mins >= 60 ? L("\(mins / 60)h before", "提前 \(mins / 60) 小时") : L("\(mins) min before", "提前 \(mins) 分钟")
-        }
-        var idx = 0
-        for mins in appointment.remindMinutesList {
-            let triggerDate = appointment.date.addingTimeInterval(-Double(mins) * 60)
-            guard triggerDate > Date() else { continue }
-
+        // (闹钟时间, 锁屏标题, 正文)
+        let alarms: [(date: Date, title: String, body: String)] = [
+            (appointment.prepAlarm,
+             L("Start-prep reminder", "准备出发提醒"),
+             L("Time to pack tools for \(ownerName)'s visit (\(petNames)).", "收拾工具出发——今天要去 \(ownerName) 家（\(petNames)）。")),
+            (appointment.departAlarm,
+             L("Latest departure", "最晚出发时间"),
+             L("Leave now to make \(ownerName)'s appointment (\(petNames)).", "现在出发刚好赶上 \(ownerName) 的预约（\(petNames)）。")),
+            (appointment.endAlarm,
+             L("Service ending", "提醒结束时间"),
+             L("Expected finish for \(ownerName)'s visit (\(petNames)).", "\(ownerName) 的预约预计这时结束（\(petNames)）。")),
+        ]
+        for (idx, alarm) in alarms.enumerated() {
+            guard let d = alarm.date, d > Date() else { continue }
             let content = UNMutableNotificationContent()
-            content.title = L("Visit reminder (\(hoursText(mins)))", "上门提醒（\(hoursText(mins))）")
-            content.body = AppLang.current == .en
-                ? "\(hoursText(mins)) - heading to " + ownerName + "\u{2019}s place (" + petNames + ")." + (mins >= 120 ? " Pack your tools." : "")
-                : "\(hoursText(mins))出发去 \(ownerName) 家（\(petNames)）。\(mins >= 120 ? "记得带齐工具。" : "")"
-            // 注：中文分支为历史测试版保留；上架英文版走 en 分支
+            content.title = alarm.title
+            content.body = alarm.body
             content.sound = .default
-
-            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: triggerDate)
+            let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: d)
             let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
-            let request = UNNotificationRequest(identifier: "\(appointment.id.uuidString)-\(idx)", content: content, trigger: trigger)
-            center.add(request)
-            idx += 1
+            center.add(UNNotificationRequest(identifier: "\(appointment.id.uuidString)-\(idx)", content: content, trigger: trigger))
         }
     }
 
     static func cancel(appointmentId: UUID) {
-        // 数组闹钟：清掉全部可能存在的带序号 identifier
+        // 清掉全部带序号 identifier（新旧两代闹钟同前缀）
         let center = UNUserNotificationCenter.current()
         center.getPendingNotificationRequests { pending in
             let ids = pending.map { $0.identifier }.filter { $0.hasPrefix(appointmentId.uuidString) }
@@ -64,7 +63,9 @@ struct RootView: View {
     @State private var data = Store.load()
     @State private var tab = 0
     // 健哥 11-19 令：新手引导——首启自动弹
-    @State private var showOnboarding = !Onboarding.isDone
+    // 健哥 11-20 令①：只对真·首次安装弹——老设备（装过任意版本）升级后不再轰炸；
+    // 引导没走完的老用户也不再每次进都弹（想看=Me页"重看新手引导"）
+    @State private var showOnboarding = !Onboarding.isDone && !UserDefaults.standard.bool(forKey: "groomerbook.everLaunched")
 
     var body: some View {
         TabView(selection: $tab) {
@@ -83,7 +84,11 @@ struct RootView: View {
                 .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
                 .tag(3)
         }
-        .onAppear { data = Store.load() }
+        .onAppear {
+            data = Store.load()
+            // 健哥11-20令①：启动即记"装过"——下次进（含升级后）不再自动弹引导
+            UserDefaults.standard.set(true, forKey: "groomerbook.everLaunched")
+        }
         .fullScreenCover(isPresented: $showOnboarding, onDismiss: { Onboarding.markDone() }) {
             OnboardingView(onFinish: {
                 Onboarding.markDone()
@@ -373,9 +378,25 @@ struct AppointmentRow: View {
                 Text(owner?.name ?? L("Unknown client", "未知客户"))
                     .font(.headline)
                 Spacer()
-                Text(tf.string(from: appt.date))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                // 健哥11-20令⑥：右侧改显示准备/结束时间（有闹钟才有；无闹钟=预约时间）
+                VStack(alignment: .trailing, spacing: 2) {
+                    if let prep = appt.prepAlarm {
+                        Label(tf.string(from: prep), systemImage: "laptopcomputer.and.iphone")
+                            .font(.caption2).foregroundColor(.blue)
+                    }
+                    if let depart = appt.departAlarm {
+                        Label(tf.string(from: depart), systemImage: "car.fill")
+                            .font(.caption2).foregroundColor(.red)
+                    } else {
+                        Text(tf.string(from: appt.date))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    if let end = appt.endAlarm {
+                        Label(tf.string(from: end), systemImage: "checkmark.circle")
+                            .font(.caption2).foregroundColor(.green)
+                    }
+                }
             }
             if !pets.isEmpty {
                 Text(pets.map { "\($0.type.emoji)\($0.name)" }.joined(separator: " ")
@@ -384,7 +405,7 @@ struct AppointmentRow: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
-            if !appt.remindMinutesList.isEmpty {
+            if !appt.remindMinutesList.isEmpty && appt.prepAlarm == nil && appt.departAlarm == nil && appt.endAlarm == nil {
                 Label(L10n.remindLabel(appt.remindMinutesList), systemImage: "bell.fill")
                     .font(.caption)
                     .foregroundColor(.blue)

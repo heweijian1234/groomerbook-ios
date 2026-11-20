@@ -58,9 +58,11 @@ struct Owner: Codable, Identifiable, Equatable {
     var familyMembers: String
     var notes: String             // 偏好备注（健哥令①：已删门禁密码示例）
     var noShowCount: Int
+    var familyDetail: [FamilyMember] = []   // 健哥11-20令③：家人详细资料（名字/电话/邮箱/照片/注意事项）
 
     init(id: UUID = UUID(), name: String, phone: String = "", email: String = "", address: String = "",
-         familyMembers: String = "", notes: String = "", noShowCount: Int = 0) {
+         familyMembers: String = "", notes: String = "", noShowCount: Int = 0,
+         familyDetail: [FamilyMember] = []) {
         self.id = id
         self.name = name
         self.phone = phone
@@ -69,7 +71,18 @@ struct Owner: Codable, Identifiable, Equatable {
         self.familyMembers = familyMembers
         self.notes = notes
         self.noShowCount = noShowCount
+        self.familyDetail = familyDetail
     }
+}
+
+/// 家人成员（健哥11-20令③：new client 的 family 字段右侧可进详细资料页）
+struct FamilyMember: Codable, Identifiable, Equatable {
+    var id: UUID = UUID()
+    var name: String = ""
+    var phone: String = ""
+    var email: String = ""
+    var note: String = ""         // 注意事项（如：耳朵背要大声点/只有周三在家）
+    var photoData: Data? = nil
 }
 
 struct Pet: Codable, Identifiable, Equatable {
@@ -131,7 +144,11 @@ struct Appointment: Codable, Identifiable, Equatable {
     var date: Date
     var groomMinutes: Int         // 美容时长（健哥令③：可选，不叫"默认"）
     var driveBufferMinutes: Int
-    var remindMinutesList: [Int]  // 健哥令⑩-v2：闹钟可设最多3个（分钟数数组，如[60,1440]；空=不提醒）
+    var remindMinutesList: [Int]  // 旧版字段（v0.2前）：保留解码兼容，新版用下面三个闹钟
+    // 健哥11-20令⑤：三种闹钟（用户自由设时间点，不再是"提前X小时"预设）
+    var prepAlarm: Date?          // 开始准备提醒（如：提前2小时收拾工具箱）
+    var departAlarm: Date?        // 最晚出发时间（路上车程+缓冲的底线）
+    var endAlarm: Date?           // 提醒结束时间（预计服务完的时间点）
     var status: Status
     var note: String
 
@@ -152,11 +169,10 @@ struct Appointment: Codable, Identifiable, Equatable {
         }
     }
 
-    /// 候选提醒时长（健哥令⑩-v2：1/2/3/4/6/10小时）
-    static let remindOptions: [Int] = [60, 120, 180, 240, 360, 600]
-
     init(id: UUID = UUID(), ownerId: UUID, petIds: [UUID] = [], date: Date, groomMinutes: Int,
-         driveBufferMinutes: Int = 15, remindMinutesList: [Int] = [60], status: Status = .scheduled, note: String = "") {
+         driveBufferMinutes: Int = 15, remindMinutesList: [Int] = [60],
+         prepAlarm: Date? = nil, departAlarm: Date? = nil, endAlarm: Date? = nil,
+         status: Status = .scheduled, note: String = "") {
         self.id = id
         self.ownerId = ownerId
         self.petIds = petIds
@@ -164,6 +180,9 @@ struct Appointment: Codable, Identifiable, Equatable {
         self.groomMinutes = groomMinutes
         self.driveBufferMinutes = driveBufferMinutes
         self.remindMinutesList = Array(remindMinutesList.prefix(3))   // 最多3个
+        self.prepAlarm = prepAlarm
+        self.departAlarm = departAlarm
+        self.endAlarm = endAlarm
         self.status = status
         self.note = note
     }
@@ -249,6 +268,8 @@ enum Exporter {
         let en = AppLang.current == .en
         let df = DateFormatter()
         df.dateFormat = "yyyy-MM-dd HH:mm"
+        let tf2 = DateFormatter()   // 健哥11-20令⑤：三闹钟导出用（只要时分）
+        tf2.dateFormat = "HH:mm"
         df.locale = Locale(identifier: en ? "en_US" : "zh_CN")
         var lines: [String] = []
         let owners: [Owner]
@@ -291,6 +312,14 @@ enum Exporter {
                     var l = "  \(df.string(from: a.date)) \(petNames) \(a.status.display) \(a.groomMinutes)\(en ? " min" : "分钟")"
                     if !a.remindMinutesList.isEmpty {
                         l += en ? " · \(a.remindMinutesList.count) reminder(s)" : " · 闹钟\(a.remindMinutesList.count)个"
+                    }
+                    // 健哥11-20令⑤：导出文本带三闹钟（有则显示）
+                    var alarmBits: [String] = []
+                    if let p = a.prepAlarm { alarmBits.append((en ? "prep " : "准备 ") + tf2.string(from: p)) }
+                    if let d = a.departAlarm { alarmBits.append((en ? "depart " : "出发 ") + tf2.string(from: d)) }
+                    if let e = a.endAlarm { alarmBits.append((en ? "end " : "结束 ") + tf2.string(from: e)) }
+                    if !alarmBits.isEmpty {
+                        l += en ? " · Alarms: " + alarmBits.joined(separator: ", ") : " · 闹钟：" + alarmBits.joined(separator: "，")
                     }
                     if !a.note.isEmpty { l += en ? " · Note: \(a.note)" : " · 备注：\(a.note)" }
                     lines.append(l)

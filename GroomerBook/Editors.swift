@@ -22,6 +22,8 @@ struct ClientEditor: View {
     @State private var pendingPets: [PendingPet] = []
     // 健哥令第七轮③：认领已登记的无主宠物
     @State private var linkedUnownedIds: Set<UUID> = []
+    // 健哥11-20令③：家人详细资料（编辑期副本，保存时落库）
+    @State private var familyDetail: [FamilyMember] = []
 
     struct PendingPet: Identifiable {
         let id = UUID()
@@ -57,6 +59,23 @@ struct ClientEditor: View {
                 Section(L("Family", "家人")) {
                     TextField(L("Who answers the door?", "家里谁对接？（如：老婆负责收狗/儿子开门）"), text: $familyMembers, axis: .vertical)
                         .lineLimit(2...3)
+                    // 健哥11-20令③：右侧进详细资料页（名字/电话/邮箱/照片/注意事项）
+                    NavigationLink {
+                        FamilyDetailEditor(members: $familyDetail)
+                    } label: {
+                        HStack {
+                            Label(L("Family details", "家人详细资料"), systemImage: "person.crop.rectangle.stack")
+                            Spacer()
+                            if !familyDetail.isEmpty {
+                                Text("\(familyDetail.count)")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 }
                 Section(L("Preferences & Notes", "偏好与备注")) {
                     TextField(L("Temperament, preferences, do-nots…", "性格、偏好、注意事项…"), text: $notes, axis: .vertical)
@@ -120,6 +139,7 @@ struct ClientEditor: View {
         guard let o = existing else { return }
         name = o.name; phone = o.phone; email = email(o)
         address = o.address; familyMembers = o.familyMembers; notes = o.notes
+        familyDetail = o.familyDetail   // 健哥11-20令③：家人详细资料带原值
     }
     private func email(_ o: Owner) -> String { o.email }
 
@@ -129,12 +149,13 @@ struct ClientEditor: View {
             if let i = data.owners.firstIndex(where: { $0.id == o.id }) {
                 o.name = name; o.phone = phone; o.email = self.email(o)
                 o.address = address; o.familyMembers = familyMembers; o.notes = notes
+                o.familyDetail = familyDetail   // 健哥11-20令③
                 data.owners[i] = o
                 savedOwner = o
             } else { return }
         } else {
             let o = Owner(name: name, phone: phone, email: email, address: address,
-                          familyMembers: familyMembers, notes: notes)
+                          familyMembers: familyMembers, notes: notes, familyDetail: familyDetail)
             data.owners.append(o)
             savedOwner = o
         }
@@ -149,6 +170,71 @@ struct ClientEditor: View {
         }
         Store.save(data)
         dismiss()
+    }
+}
+
+// MARK: - 家人详细资料页（健哥11-20令③：名字/电话/邮箱/照片/注意事项）
+// 顶层页内 NavigationLink 进入，返回自动带回（$binding 直改父状态）。
+
+struct FamilyDetailEditor: View {
+    @Binding var members: [FamilyMember]
+
+    var body: some View {
+        List {
+            ForEach($members) { $m in
+                Section {
+                    TextField(L("Name (e.g. wife / son…)", "名字（如：老婆/儿子…）"), text: $m.name)
+                    TextField(L("Phone", "电话"), text: $m.phone)
+                        .keyboardType(.phonePad)
+                    TextField(L("Email", "邮箱"), text: $m.email)
+                        .keyboardType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                    // 照片（与宠物照片同款压缩纪律：600px/JPEG0.7 防 UserDefaults 爆）
+                    HStack {
+                        if let d = m.photoData, let ui = UIImage(data: d) {
+                            Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 60, height: 60)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                            Button(role: .destructive) {
+                                m.photoData = nil
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                        } else {
+                            PhotosPicker(selection: Binding(
+                                get: { nil },
+                                set: { item in
+                                    guard let item else { return }
+                                    Task {
+                                        if let data = try? await item.loadTransferable(type: Data.self),
+                                           let img = UIImage(data: data),
+                                           let resized = img.resized(maxSide: 600),
+                                           let jpeg = resized.jpegData(compressionQuality: 0.7) {
+                                            m.photoData = jpeg
+                                        }
+                                    }
+                                }
+                            )) {
+                                Label(L("Photo", "照片"), systemImage: "photo.badge.plus")
+                            }
+                        }
+                    }
+                    TextField(L("Notes (hard of hearing / only home Wednesdays…)", "注意事项（耳朵背要大声点/只有周三在家…）"), text: $m.note, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+            }
+            .onDelete { members.remove(atOffsets: $0) }
+            Button {
+                members.append(FamilyMember())
+            } label: {
+                Label(L("Add family member", "加一位家人"), systemImage: "plus.circle")
+            }
+        }
+        .navigationTitle(L("Family Details", "家人详细资料"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -191,7 +277,8 @@ struct ContactPicker: UIViewControllerRepresentable {
 }
 
 // MARK: - 宠物认领选择器（健哥令第七轮③④：新增客户/加宠物时可选择已登记的无主宠物）
-// 规则：有主的宠物列出但置灰不可选（字体偏灰）；无主宠物可选（字体色深）。
+// 健哥11-20令⑤：删"已有主人（不可选）"段——新增第二个客户时不再显示其他主人的宠物（看串了），
+// 只保留无主宠物认领。
 
 struct PetLinkPicker: View {
     @Binding var data: Store.Data
@@ -207,66 +294,34 @@ struct PetLinkPicker: View {
         }
     }
 
-    private var ownedByOthers: [Pet] {
-        data.pets.filter { pet in
-            if pet.ownerId == forOwnerId { return false }
-            return data.owners.contains(where: { $0.id == pet.ownerId })
-        }
-    }
-
     var body: some View {
         Group {
-            if unowned.isEmpty && ownedByOthers.isEmpty {
-                EmptyView()
-            } else {
-                // 无主宠物：可选（色深）
-                if !unowned.isEmpty {
-                    Section {
-                        ForEach(unowned) { pet in
-                            Button {
-                                if selectedUnownedIds.contains(pet.id) {
-                                    selectedUnownedIds.remove(pet.id)
-                                } else {
-                                    selectedUnownedIds.insert(pet.id)
-                                }
-                            } label: {
-                                HStack {
-                                    Text("\(pet.type.emoji) \(pet.name)")
-                                        .foregroundColor(.primary)   // 色深=可选
-                                    Spacer()
-                                    if selectedUnownedIds.contains(pet.id) {
-                                        Image(systemName: "checkmark.circle.fill")
-                                            .foregroundColor(.orange)
-                                    }
-                                }
+            // 无主宠物：可选（色深）——其他客户的宠物一律不出现（健哥11-20令⑤）
+            if !unowned.isEmpty {
+                Section {
+                    ForEach(unowned) { pet in
+                        Button {
+                            if selectedUnownedIds.contains(pet.id) {
+                                selectedUnownedIds.remove(pet.id)
+                            } else {
+                                selectedUnownedIds.insert(pet.id)
                             }
-                        }
-                    } header: {
-                        Text(L("Unregistered owner — link one", "无主宠物——可认领"))
-                    } footer: {
-                        Text(L("These pets have no client yet — select to make this client their owner.", "这些宠物还没归属客户——选中后归到本客户名下。"))
-                    }
-                }
-                // 有主宠物：置灰不可选
-                if !ownedByOthers.isEmpty {
-                    Section {
-                        ForEach(ownedByOthers) { pet in
+                        } label: {
                             HStack {
                                 Text("\(pet.type.emoji) \(pet.name)")
-                                    .foregroundColor(.gray)   // 偏灰=不可选
+                                    .foregroundColor(.primary)   // 色深=可选
                                 Spacer()
-                                if let ownerName = data.owners.first(where: { $0.id == pet.ownerId })?.name {
-                                    Text(ownerName)
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                if selectedUnownedIds.contains(pet.id) {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.orange)
                                 }
                             }
                         }
-                    } header: {
-                        Text(L("Already have an owner", "已有主人（不可选）"))
-                    } footer: {
-                        Text(L("Pets already belong to another client and can't be selected. Use \"Add a Pet\" to create a new one.", "这些宠物已属于其他客户，不可选。要加新的请用下方\"新增宠物\"。"))
                     }
+                } header: {
+                    Text(L("Unregistered owner — link one", "无主宠物——可认领"))
+                } footer: {
+                    Text(L("These pets have no client yet — select to make this client their owner.", "这些宠物还没归属客户——选中后归到本客户名下。"))
                 }
             }
         }
@@ -300,6 +355,9 @@ struct PetEditor: View {
     @State private var vaccineExpiry = Date()
     // 健哥令第七轮④：客户详情/宠物页加宠物时，可改为认领无主宠物（选中后本表单只做认领）
     @State private var claimUnownedId: UUID?
+    // 健哥11-20令③：内联新建客户（宠物页直接把主人顺手填了——合成一页）
+    @State private var newOwnerName = ""
+    @State private var newOwnerPhone = ""
 
     /// 全库无主宠物（ownerId 无对应客户）
     private var unownedPets: [Pet] {
@@ -385,16 +443,29 @@ struct PetEditor: View {
                     TextField(L("Breed", "品种"), text: $breed)
                 }
                 Section(L("Owner", "主人")) {
-                    if data.owners.isEmpty {
-                        Text(L("Add a client first (Clients tab).", "请先在「客户」页添加客户。"))
+                    if data.owners.isEmpty && newOwnerName.isEmpty {
+                        // 健哥11-20令③：没客户不必跳页——本页直接顺手建（一页填完主人和宠物）
+                        Text(L("No client yet — create one right here:", "还没有客户——直接在这里建："))
                             .font(.footnote)
                             .foregroundColor(.orange)
-                    } else {
+                    }
+                    if !data.owners.isEmpty || !newOwnerName.isEmpty {
                         Picker(L("Client", "客户"), selection: $ownerId) {
                             ForEach(data.owners) { o in
                                 Text(o.name).tag(Optional(o.id))
                             }
                         }
+                    }
+                    // 健哥11-20令③：内联新建客户（合成一页——填了名字保存时自动建客户并挂给它）
+                    if !data.owners.isEmpty {
+                        Text(L("or create a new client:", "或新建客户："))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    TextField(L("New client name (phone optional)", "新客户姓名（电话可填可不填）"), text: $newOwnerName)
+                    if !newOwnerName.isEmpty {
+                        TextField(L("Phone (optional)", "电话（可选）"), text: $newOwnerPhone)
+                            .keyboardType(.phonePad)
                     }
                 }
                 // 健好令⑦：喜好
@@ -443,7 +514,7 @@ struct PetEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L("Save", "保存")) { save() }
-                        .disabled(name.isEmpty || ownerId == nil && !data.owners.isEmpty)
+                        .disabled(name.isEmpty || (ownerId == nil && newOwnerName.trimmingCharacters(in: .whitespaces).isEmpty))
                 }
             }
             .onAppear(perform: load)
@@ -464,7 +535,17 @@ struct PetEditor: View {
     }
 
     private func save() {
-        guard let oid = ownerId else { return }
+        // 健哥11-20令③：内联新建客户——填了新客户名就先建客户，宠物直接挂它（合成一页）
+        var oid: UUID
+        if !newOwnerName.trimmingCharacters(in: .whitespaces).isEmpty {
+            let o = Owner(name: newOwnerName.trimmingCharacters(in: .whitespaces),
+                          phone: newOwnerPhone.trimmingCharacters(in: .whitespaces))
+            data.owners.append(o)
+            oid = o.id
+        } else {
+            guard let existingOid = ownerId else { return }
+            oid = existingOid
+        }
         // 健哥令第七轮④：认领模式——把无主宠物改挂所选客户，不新建
         if let claimId = claimUnownedId,
            let i = data.pets.firstIndex(where: { $0.id == claimId }) {
@@ -508,7 +589,13 @@ struct AppointmentEditor: View {
     @State private var date = Date()
     @State private var minutes = 90
     @State private var buffer = 15
-    @State private var remindSelections: [Int] = [60]
+    // 健哥11-20令⑤：三种闹钟（用户自由设时间点）——旧"提前X小时"预设废弃
+    @State private var hasPrepAlarm = false
+    @State private var prepAlarm = Date()
+    @State private var hasDepartAlarm = false
+    @State private var departAlarm = Date()
+    @State private var hasEndAlarm = false
+    @State private var endAlarm = Date()
     @State private var note = ""
     @State private var loaded = false
 
@@ -597,33 +684,24 @@ struct AppointmentEditor: View {
                     }
                     Stepper(L("Drive buffer \(buffer) min", "车程缓冲 \(buffer) 分钟"), value: $buffer, in: 0...60, step: 5)
                 }
-                // 健哥令⑩-v2：最多三个闹钟，1/2/3/4/6/10小时可选
+                // 健哥11-20令⑤：三种闹钟（开/关+自由设时间）——锁屏标题就是闹钟名
                 Section {
-                    ForEach(remindSelections.indices, id: \.self) { idx in
-                        Picker(L("Reminder \(idx + 1)", "闹钟 \(idx + 1)"), selection: $remindSelections[idx]) {
-                            ForEach(Appointment.remindOptions, id: \.self) { mins in
-                                Text(label(mins)).tag(mins)
-                            }
-                        }
+                    Toggle(L("Start-prep reminder", "开始准备提醒"), isOn: $hasPrepAlarm)
+                    if hasPrepAlarm {
+                        DatePicker(L("Prep alarm", "闹钟时间"), selection: $prepAlarm)
                     }
-                    if remindSelections.count < 3 {
-                        Button {
-                            remindSelections.append(120)
-                        } label: {
-                            Label(L("Add reminder", "加一个闹钟"), systemImage: "plus.circle")
-                        }
+                    Toggle(L("Latest departure time", "最晚出发时间"), isOn: $hasDepartAlarm)
+                    if hasDepartAlarm {
+                        DatePicker(L("Depart alarm", "闹钟时间"), selection: $departAlarm)
                     }
-                    if !remindSelections.isEmpty {
-                        Button(role: .destructive) {
-                            remindSelections = []
-                        } label: {
-                            Label(L("Clear all", "全部清除"), systemImage: "trash")
-                        }
+                    Toggle(L("End-of-service reminder", "提醒结束时间"), isOn: $hasEndAlarm)
+                    if hasEndAlarm {
+                        DatePicker(L("End alarm", "闹钟时间"), selection: $endAlarm)
                     }
                 } header: {
-                    Text(L("Reminders (up to 3)", "提醒（闹钟，最多3个）"))
+                    Text(L("Alarms", "闹钟"))
                 } footer: {
-                    Text(L("System notifications remind you when to leave. Up to 3, e.g. 2h before to pack tools + 1h before to leave.", "到点系统通知提醒你出发。最多设3个，如：提前2小时整理工具 + 提前1小时出发。"))
+                    Text(L("Turn on what you need and set any time. Alarm names show on your Lock Screen, e.g. \"Start-prep reminder\".", "要哪个开哪个，时间自由设。闹钟响时锁屏显示名称，如「准备出发提醒」。"))
                 }
                 Section(L("Notes", "备注")) {
                     TextField(L("Note (optional)", "备注（可选）"), text: $note, axis: .vertical)
@@ -649,7 +727,15 @@ struct AppointmentEditor: View {
                     date = appt.date
                     minutes = appt.groomMinutes
                     buffer = appt.driveBufferMinutes
-                    remindSelections = appt.remindMinutesList.isEmpty ? [] : appt.remindMinutesList
+                    // 健哥11-20令⑤：三闹钟带原值（旧数据无闹钟=旧分钟数换算成出发闹钟）
+                    if let p = appt.prepAlarm { hasPrepAlarm = true; prepAlarm = p }
+                    if let d = appt.departAlarm { hasDepartAlarm = true; departAlarm = d }
+                    else if let legacy = appt.remindMinutesList.first {
+                        // 旧"提前60分钟"迁移：换算成绝对时间挂到出发闹钟（不打丢用户旧设置）
+                        hasDepartAlarm = true
+                        departAlarm = appt.date.addingTimeInterval(-Double(legacy) * 60)
+                    }
+                    if let e = appt.endAlarm { hasEndAlarm = true; endAlarm = e }
                     note = appt.note
                     loaded = true
                 } else if ownerId == nil {
@@ -658,21 +744,23 @@ struct AppointmentEditor: View {
                         minutes = p.defaultMinutes
                         selectedPetIds = [p.id]
                     }
+                    // 新建默认：最晚出发=预约前车程缓冲
+                    hasDepartAlarm = true
+                    departAlarm = date.addingTimeInterval(-Double(buffer) * 60)
                 }
             }
         }
-    }
-
-    private func label(_ mins: Int) -> String {
-        // 第七轮②：英文版闹钟选项双语（原为裸中文）
-        mins >= 60 ? L("\(mins / 60) h before", "提前 \(mins / 60) 小时") : L("\(mins) min before", "提前 \(mins) 分钟")
     }
 
     private func save() {
         guard let oid = ownerId else { return }
         let appt = Appointment(id: editing?.id ?? UUID(), ownerId: oid, petIds: Array(selectedPetIds), date: date,
                                groomMinutes: minutes, driveBufferMinutes: buffer,
-                               remindMinutesList: remindSelections, status: editing?.status ?? .scheduled, note: note)
+                               remindMinutesList: [],
+                               prepAlarm: hasPrepAlarm ? prepAlarm : nil,
+                               departAlarm: hasDepartAlarm ? departAlarm : nil,
+                               endAlarm: hasEndAlarm ? endAlarm : nil,
+                               status: editing?.status ?? .scheduled, note: note)
 
         if let editing, let idx = data.appointments.firstIndex(where: { $0.id == editing.id }) {
             data.appointments[idx] = appt    // 健哥令第五轮①：更新而非追加
@@ -717,6 +805,17 @@ struct FeedbackView: View {
                             }
                         }
                     )
+                    // 健哥11-20令②：键盘收不掉根修——键盘上沿加"完成"键一键收起
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Spacer()
+                            Button {
+                                UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            } label: {
+                                Label(L("Done", "完成"), systemImage: "keyboard.chevron.compact.down")
+                            }
+                        }
+                    }
             }
             Section {
                 Button {
@@ -769,6 +868,10 @@ struct FeedbackView: View {
                 body: feedbackText
             )
             .ignoresSafeArea()
+        }
+        // 健哥11-20令②：点页面任意空白处收键盘（Form滚动区外同样生效）
+        .onTapGesture {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
     }
 }
