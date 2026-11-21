@@ -18,21 +18,15 @@ struct ClientEditor: View {
     @State private var notes = ""
     @State private var showContactPicker = false
 
-    // 内嵌宠物录入（健哥令⑦：新建客户页下方顺便加宠物）
-    @State private var pendingPets: [PendingPet] = []
+    // 内嵌宠物录入（健哥令⑦：新建客户页下方顺便加宠物；11-21令①：升级完整信息暂存）
+    @State private var pendingPets: [Pet] = []
     // 健哥令第七轮③：认领已登记的无主宠物
     @State private var linkedUnownedIds: Set<UUID> = []
     // 健哥11-20令③：家人详细资料（编辑期副本，保存时落库）
     @State private var familyDetail: [FamilyMember] = []
-
-    struct PendingPet: Identifiable {
-        let id = UUID()
-        var name = ""
-        var type: PetType = .dog
-        var breed = ""
-        var weight = 10.0
-        var groomRecipe = ""
-    }
+    // 健哥11-21令①：完整宠物表单的弹出与编辑目标
+    @State private var addingPet = false
+    @State private var editingPendingPet: Pet?
 
     var body: some View {
         NavigationStack {
@@ -81,31 +75,33 @@ struct ClientEditor: View {
                     TextField(L("Temperament, preferences, do-nots…", "性格、偏好、注意事项…"), text: $notes, axis: .vertical)
                         .lineLimit(3...6)
                 }
-                // 内嵌宠物（健哥令⑦）+ 认领无主宠物（第七轮③）
+                // 内嵌宠物（健哥令⑦；11-21令①：宠物页已删，这里升级为完整信息录入——
+                // 点"加一只宠物"弹完整 PetEditor 表单：脾气/咬人/喜好/状态/照片/疫苗全都有）
                 Section(L("Pets (add now or later)", "宠物（可顺便录入，也可以后再加）")) {
-                    ForEach($pendingPets) { $pet in
-                        VStack(alignment: .leading, spacing: 8) {
-                            HStack {
-                                TextField(L("Pet name", "宠物名字"), text: $pet.name)
-                                Picker("", selection: $pet.type) {
-                                    ForEach(PetType.allCases, id: \.self) { t in
-                                        Text("\(t.emoji) \(t.display)").tag(t)
-                                    }
+                    ForEach(pendingPets) { pet in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(pet.type.emoji) \(pet.name)")
+                                    .font(.headline)
+                                HStack(spacing: 6) {
+                                    if pet.biteLevel == 2 { Text(L("BITES", "咬人")).font(.caption2).foregroundColor(.red) }
+                                    else if pet.biteLevel == 1 { Text(L("care", "谨慎")).font(.caption2).foregroundColor(.orange) }
+                                    if !pet.breed.isEmpty { Text(pet.breed).font(.caption2).foregroundColor(.secondary) }
+                                    if !pet.temperament.isEmpty { Text(pet.temperament).font(.caption2).foregroundColor(.secondary) }
                                 }
-                                .pickerStyle(.menu)
-                                .frame(width: 110)
                             }
-                            TextField(L("Breed", "品种"), text: $pet.breed)
-                            TextField(L("Recipe (style/shampoo…)", "美容配方（造型/洗毛精…）"), text: $pet.groomRecipe, axis: .vertical)
-                                .lineLimit(2...4)
+                            Spacer()
+                            Button(L("Edit", "改")) {
+                                editingPendingPet = pet
+                            }
+                            .font(.caption)
                         }
-                        .padding(.vertical, 2)
                     }
                     .onDelete { pendingPets.remove(atOffsets: $0) }
                     Button {
-                        pendingPets.append(PendingPet())
+                        addingPet = true
                     } label: {
-                        Label(L("Add a Pet", "加一只宠物"), systemImage: "plus.circle")
+                        Label(L("Add a Pet (full details)", "加一只宠物（完整信息）"), systemImage: "plus.circle")
                     }
                 }
                 // 健哥令第七轮③：已登记宠物选择（有主置灰/无主可认领）
@@ -131,6 +127,19 @@ struct ClientEditor: View {
                     }
                 }
             }
+            // 健哥11-21令①：完整宠物表单（加新=空表单；编辑=带暂存值）
+            .sheet(isPresented: $addingPet) {
+                PetEditor(data: $data, existing: nil, presetOwnerId: nil, onPrepared: { pet in
+                    pendingPets.append(pet)
+                })
+            }
+            .sheet(item: $editingPendingPet) { pet in
+                PetEditor(data: $data, existing: pet, presetOwnerId: nil, onPrepared: { updated in
+                    if let i = pendingPets.firstIndex(where: { $0.id == updated.id }) {
+                        pendingPets[i] = updated
+                    }
+                })
+            }
             .onAppear(perform: load)
         }
     }
@@ -140,6 +149,8 @@ struct ClientEditor: View {
         name = o.name; phone = o.phone; email = email(o)
         address = o.address; familyMembers = o.familyMembers; notes = o.notes
         familyDetail = o.familyDetail   // 健哥11-20令③：家人详细资料带原值
+        // 健哥11-21令①：编辑客户时已有宠物带进暂存列表（可改可删）
+        pendingPets = data.pets.filter { $0.ownerId == o.id }
     }
     private func email(_ o: Owner) -> String { o.email }
 
@@ -159,10 +170,24 @@ struct ClientEditor: View {
             data.owners.append(o)
             savedOwner = o
         }
-        // 内嵌宠物落库
-        for pp in pendingPets where !pp.name.isEmpty {
-            data.pets.append(Pet(name: pp.name, type: pp.type, breed: pp.breed, weightKg: pp.weight,
-                                 ownerId: savedOwner.id, groomRecipe: pp.groomRecipe))
+        // 内嵌宠物落库（11-21令①：完整Pet对象暂存——新增的挂主人；编辑的更新；删掉的移除）
+        if let o = existing {
+            // 编辑模式：该客户旧宠物里不在 pending 的=被删了
+            let pendingIds = Set(pendingPets.map { $0.id })
+            data.pets.removeAll { $0.ownerId == o.id && !pendingIds.contains($0.id) }
+            for var pp in pendingPets where !pp.name.isEmpty {
+                pp.ownerId = savedOwner.id
+                if let i = data.pets.firstIndex(where: { $0.id == pp.id }) {
+                    data.pets[i] = pp
+                } else {
+                    data.pets.append(pp)
+                }
+            }
+        } else {
+            for var pp in pendingPets where !pp.name.isEmpty {
+                pp.ownerId = savedOwner.id
+                data.pets.append(pp)
+            }
         }
         // 认领的无主宠物改挂本客户（第七轮③）
         for i in data.pets.indices where linkedUnownedIds.contains(data.pets[i].id) {
@@ -334,6 +359,8 @@ struct PetEditor: View {
     @Binding var data: Store.Data
     let existing: Pet?
     let presetOwnerId: UUID?
+    /// 健哥11-21令①：ClientEditor 场景回调——"保存"不直接落库，把完整 Pet 交回父视图暂存
+    var onPrepared: ((Pet) -> Void)? = nil
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
@@ -371,7 +398,8 @@ struct PetEditor: View {
         NavigationStack {
             Form {
                 // 健哥令第七轮④：先选——认领已有的无主宠物（选中即跳过新建表单）
-                if !unownedPets.isEmpty {
+                // （11-21令①：ClientEditor暂存模式下不出现——主人未定，认领无意义）
+                if onPrepared == nil && !unownedPets.isEmpty {
                     Section {
                         ForEach(unownedPets) { pet in
                             Button {
@@ -442,6 +470,7 @@ struct PetEditor: View {
                     }
                     TextField(L("Breed", "品种"), text: $breed)
                 }
+                if onPrepared == nil {
                 Section(L("Owner", "主人")) {
                     if data.owners.isEmpty && newOwnerName.isEmpty {
                         // 健哥11-20令③：没客户不必跳页——本页直接顺手建（一页填完主人和宠物）
@@ -467,6 +496,7 @@ struct PetEditor: View {
                         TextField(L("Phone (optional)", "电话（可选）"), text: $newOwnerPhone)
                             .keyboardType(.phonePad)
                     }
+                }
                 }
                 // 健好令⑦：喜好
                 Section(L("Favorites (rapport)", "喜好（沟通时讨好它用）")) {
@@ -514,7 +544,7 @@ struct PetEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(L("Save", "保存")) { save() }
-                        .disabled(name.isEmpty || (ownerId == nil && newOwnerName.trimmingCharacters(in: .whitespaces).isEmpty))
+                        .disabled(name.isEmpty || (onPrepared == nil && ownerId == nil && newOwnerName.trimmingCharacters(in: .whitespaces).isEmpty))
                 }
             }
             .onAppear(perform: load)
@@ -535,6 +565,19 @@ struct PetEditor: View {
     }
 
     private func save() {
+        // 健哥11-21令①：ClientEditor 场景——不落库，把完整 Pet 交回父视图暂存
+        // （主人还没保存，此刻落库会挂错人；统一等 ClientEditor.save() 落）
+        if let cb = onPrepared {
+            let petId = existing?.id ?? UUID()
+            let p = Pet(id: petId, name: name, type: type, breed: breed, weightKg: weight,
+                        ownerId: presetOwnerId ?? UUID(), temperament: temperament, biteLevel: biteLevel,
+                        groomRecipe: groomRecipe, specialTools: specialTools, favoriteFood: favoriteFood,
+                        favoritePetting: favoritePetting, status: status, photoData: photoData,
+                        vaccineExpiry: hasVaccine ? vaccineExpiry : nil)
+            cb(p)
+            dismiss()
+            return
+        }
         // 健哥11-20令③：内联新建客户——填了新客户名就先建客户，宠物直接挂它（合成一页）
         var oid: UUID
         if !newOwnerName.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -784,11 +827,14 @@ struct AppointmentEditor: View {
 struct FeedbackView: View {
     /// 重看新手引导回调（健哥 11-19 令：Me 页入口）
     var replayOnboarding: (() -> Void)? = nil
+    /// 返回键回调（健哥 11-21 令②：右上角返回——Tab 根页用切 Tab 实现"返回"）
+    var onBack: (() -> Void)? = nil
     @State private var feedbackText = ""
     @State private var showMail = false
     @State private var mailUnavailable = false
 
     var body: some View {
+        NavigationStack {
         Form {
             Section(L("Feedback", "反馈意见")) {
                 TextEditor(text: $feedbackText)
@@ -869,9 +915,25 @@ struct FeedbackView: View {
             )
             .ignoresSafeArea()
         }
-        // 健哥11-20令②：点页面任意空白处收键盘（Form滚动区外同样生效）
-        .onTapGesture {
+        // 健哥11-20令②：点页面空白处收键盘——🔴11-21修正：onTapGesture 会吞掉 Form 内全部
+        // Button 点击（Replay引导/发邮件全点不动，健哥实锤）；改 simultaneousGesture 与按钮共存，
+        // 另加 scrollDismissesKeyboard（滚动即收）
+        .simultaneousGesture(TapGesture().onEnded {
             UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        })
+        .scrollDismissesKeyboard(.interactively)
+        // 健哥11-21令②：右上角返回键（Tab根页无系统返回——用onBack切回Today）
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    onBack?()
+                } label: {
+                    Label(L("Back", "返回"), systemImage: "chevron.left.circle.fill")
+                }
+            }
+        }
+        .navigationTitle(L("Feedback", "反馈"))
+        .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

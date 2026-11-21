@@ -77,6 +77,8 @@ struct RootView: View {
                 .tag(1)
             FeedbackView(replayOnboarding: {
                 showOnboarding = true
+            }, onBack: {
+                tab = 0   // 健哥11-21令②：右上角返回=切回今日页
             })
                 .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
                 .tag(2)
