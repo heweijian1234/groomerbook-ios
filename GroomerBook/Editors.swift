@@ -915,13 +915,11 @@ struct FeedbackView: View {
             )
             .ignoresSafeArea()
         }
-        // 健哥11-20令②：点页面空白处收键盘——🔴11-21修正：onTapGesture 会吞掉 Form 内全部
-        // Button 点击（Replay引导/发邮件全点不动，健哥实锤）；改 simultaneousGesture 与按钮共存，
-        // 另加 scrollDismissesKeyboard（滚动即收）
-        .simultaneousGesture(TapGesture().onEnded {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        })
-        .scrollDismissesKeyboard(.interactively)
+        // 健哥11-20令②：收键盘——🔴11-21二次修正（返工）：
+        // onTapGesture 吞 Button（一次修）→ simultaneousGesture 仍与 Form 滚动/按钮竞争（健哥再实锤）。
+        // 根治=彻底删全局手势，只留苹果官方两通道：①键盘"完成"键（上面 toolbar 已有）
+        // ②scrollDismissesKeyboard 滚动即收。多一手势都是祸。
+        .scrollDismissesKeyboard(.immediately)
         // 健哥11-21令②：右上角返回键（Tab根页无系统返回——用onBack切回Today）
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
