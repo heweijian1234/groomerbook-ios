@@ -75,14 +75,11 @@ struct RootView: View {
             ClientListView(data: $data)
                 .tabItem { Label(L("Clients", "客户"), systemImage: "person.2") }
                 .tag(1)
-            PetListView(data: $data)
-                .tabItem { Label(L("Pets", "宠物"), systemImage: "pawprint") }
-                .tag(2)
             FeedbackView(replayOnboarding: {
                 showOnboarding = true
             })
                 .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
-                .tag(3)
+                .tag(2)
         }
         .onAppear {
             data = Store.load()
@@ -481,8 +478,13 @@ struct AppointmentRow: View {
 struct ClientListView: View {
     @Binding var data: Store.Data
     @State private var showAdd = false
-    @State private var exportText: String?
-    @State private var showShare = false
+    // 健哥11-21令①：总导出直传文本（Identifiable 包装——sheet(item:) 用）
+    @State private var shareText: ShareTextItem?
+
+    struct ShareTextItem: Identifiable {
+        let id = UUID()
+        let text: String
+    }
 
     var body: some View {
         NavigationStack {
@@ -533,8 +535,9 @@ struct ClientListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        exportText = Exporter.makeText(data: data)
-                        showShare = true
+                        // 健哥11-21令①：总导出空内容根修——不再走 exportText State 中转
+                        // （sheet 内容闭包同帧读旧值 nil → 导出空字符串），直接 item 直传
+                        shareText = ShareTextItem(text: Exporter.makeText(data: data))
                     } label: {
                         Image(systemName: "square.and.arrow.up")
                     }
@@ -546,10 +549,9 @@ struct ClientListView: View {
             .sheet(isPresented: $showAdd, onDismiss: { data = Store.load() }) {
                 ClientEditor(data: $data, existing: nil)
             }
-            .sheet(isPresented: $showShare, onDismiss: { exportText = nil }) {
-                // 健哥令第五轮③：卡死根因=首帧时 exportText 还没就绪渲染空 sheet。
-                // 改：始终构造（text 为空时给占位），不再 if-let 短路
-                ShareSheet(items: [exportText ?? ""])
+            // 健哥11-21令①：sheet(item:) 模式——文本即 item，构造时确定，永不为空
+            .sheet(item: $shareText) { item in
+                ShareSheet(items: [item.text])
             }
         }
     }
@@ -668,59 +670,6 @@ struct ClientDetailView: View {
         .sheet(isPresented: $showShare, onDismiss: { exportText = nil }) {
             // 健哥令第五轮③：同上——不做 if-let 短路（首点必出内容）
             ShareSheet(items: [exportText ?? ""])
-        }
-    }
-}
-
-// MARK: - Tab3 宠物列表
-
-struct PetListView: View {
-    @Binding var data: Store.Data
-    @State private var showAdd = false
-
-    var sorted: [Pet] {
-        data.pets.sorted { a, b in
-            if a.biteLevel != b.biteLevel { return a.biteLevel > b.biteLevel }
-            return a.name < b.name
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            Group {
-                if data.pets.isEmpty {
-                    VStack(spacing: 14) {
-                        Spacer()
-                        Image(systemName: "pawprint")
-                            .font(.system(size: 52))
-                            .foregroundColor(.orange)
-                        Text(L("No pets yet", "还没有宠物"))
-                            .font(.headline)
-                        Text(L("Pets are added with a client — or here.", "宠物在新建客户时可顺便录入，也可在这里添加。"))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
-                } else {
-                    List {
-                        ForEach(sorted) { pet in
-                            NavigationLink(destination: PetDetailView(pet: pet, data: $data)) {
-                                PetRow(pet: pet)
-                            }
-                        }
-                        .onDelete { data.pets.remove(atOffsets: $0); Store.save(data) }
-                    }
-                }
-            }
-            .navigationTitle(L("Pets", "宠物"))
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
-                }
-            }
-            .sheet(isPresented: $showAdd, onDismiss: { data = Store.load() }) {
-                PetEditor(data: $data, existing: nil, presetOwnerId: nil)
-            }
         }
     }
 }
