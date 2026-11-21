@@ -868,12 +868,9 @@ struct FeedbackView: View {
                     if MFMailComposeViewController.canSendMail() {
                         showMail = true
                     } else {
-                        // 未配系统邮件账户：退回 mailto 直跳（仍比无响应好）
-                        let subject = "GroomerBook Feedback".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                        let body = feedbackText.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
-                        if let url = URL(string: "mailto:zerone348@gmail.com?subject=\(subject)&body=\(body)") {
-                            UIApplication.shared.open(url)
-                        }
+                        // 健哥11-21令：无系统邮件账户时不再静默 mailto（跳过去白屏像"没反应"）——
+                        // 直接弹明确提示 sheet：给出邮箱地址+正文已复制，用户自己去 QQ邮箱/微信 里发
+                        UIPasteboard.general.string = feedbackText
                         mailUnavailable = true
                     }
                 } label: {
@@ -886,13 +883,6 @@ struct FeedbackView: View {
                 // 健哥令第七轮⑦：道歉+欢迎新功能想法（上架英文版）
                 Text(L("Sorry for any trouble! Please tell the developer what's not working — it will be fixed as soon as possible. New feature ideas are also very welcome, so the app can serve you better.\n\nFeedback goes straight to the developer by email. Nothing is stored in the app. To go back, just switch tabs at the bottom.",
                        "若有使用不便十分抱歉，请把具体问题反馈给开发者，会尽快修改。若有新功能想法，也可以告知，让开发者更好服务。\n\n反馈通过邮件直达开发者，不留任何数据在 App 里。返回请点底部标签切换。"))
-            }
-            if mailUnavailable {
-                Section {
-                    Label(L("No system Mail account found — the Mail app opened instead. If nothing happened, email zerone348@gmail.com directly.", "未检测到系统邮件账户——已尝试跳转邮件。若没反应，请直接发邮件到 zerone348@gmail.com"), systemImage: "info.circle")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                }
             }
             // 健哥 11-19 令：新手引导重看入口
             Section {
@@ -914,6 +904,33 @@ struct FeedbackView: View {
                 body: feedbackText
             )
             .ignoresSafeArea()
+        }
+        // 健哥11-21令：无邮件账户的明确出口（正文已复制+邮箱地址可长按复制，去任意邮件App发）
+        .sheet(isPresented: $mailUnavailable) {
+            NavigationStack {
+                Form {
+                    Section {
+                        Text(L("No system Mail account on this phone, so the draft can't open here.", "本机没配系统邮件账户，草稿打不开。"))
+                            .font(.subheadline)
+                        Text(L("Your feedback has been copied. Send it from any mail app (QQ Mail / Gmail / Outlook) to:", "你的反馈文字已复制。请在任意邮件App（QQ邮箱/Gmail/Outlook）里粘贴发给："))
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                        Text("zerone348@gmail.com")
+                            .font(.body.bold())
+                            .textSelection(.enabled)
+                    } footer: {
+                        Text(L("Long-press the address above to copy it.", "长按上面地址可复制。"))
+                    }
+                }
+                .navigationTitle(L("Email the Developer", "邮件发给开发者"))
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(L("Done", "完成")) { mailUnavailable = false }
+                    }
+                }
+            }
+            .presentationDetents([.medium])
         }
         // 健哥11-20令②：收键盘——🔴11-21二次修正（返工）：
         // onTapGesture 吞 Button（一次修）→ simultaneousGesture 仍与 Form 滚动/按钮竞争（健哥再实锤）。
