@@ -830,8 +830,15 @@ struct FeedbackView: View {
     /// 返回键回调（健哥 11-21 令②：右上角返回——Tab 根页用切 Tab 实现"返回"）
     var onBack: (() -> Void)? = nil
     @State private var feedbackText = ""
-    @State private var showMail = false
-    @State private var mailUnavailable = false
+    // 🔴健哥11-21令复查破案：同 view 挂两个 sheet(isPresented:) 只有最后一个生效（SwiftUI 已知限制）
+    // ——showMail 的 sheet 被 mailUnavailable 的 sheet 覆盖注册，有系统邮件账户时点按钮没反应。
+    // 根修：合并成一个 sheet(item:)（枚举两态），永不冲突。
+    private enum MailFlow: Identifiable {
+        case composer      // 有系统邮件账户→原生邮件草稿
+        case noAccount     // 无账户→提示页（正文已复制+邮箱地址）
+        var id: String { switch self { case .composer: return "composer"; case .noAccount: return "noAccount" } }
+    }
+    @State private var mailFlow: MailFlow?
 
     var body: some View {
         NavigationStack {
@@ -866,12 +873,12 @@ struct FeedbackView: View {
             Section {
                 Button {
                     if MFMailComposeViewController.canSendMail() {
-                        showMail = true
+                        mailFlow = .composer
                     } else {
-                        // 健哥11-21令：无系统邮件账户时不再静默 mailto（跳过去白屏像"没反应"）——
-                        // 直接弹明确提示 sheet：给出邮箱地址+正文已复制，用户自己去 QQ邮箱/微信 里发
+                        // 健哥11-21令：无系统邮件账户时不跳 mailto（白屏像没反应）——
+                        // 弹明确提示：正文已复制+邮箱地址，用户去任意邮件App发
                         UIPasteboard.general.string = feedbackText
-                        mailUnavailable = true
+                        mailFlow = .noAccount
                     }
                 } label: {
                     Label(L("Send Feedback by Email", "发送反馈（走你的邮件）"), systemImage: "paperplane.fill")
@@ -897,40 +904,44 @@ struct FeedbackView: View {
                 Text(L("New here? A 4-step quick tour of Today, Clients, Pets and booking.", "第一次用？4步快速过一遍今日/客户/宠物/约单。"))
             }
         }
-        .sheet(isPresented: $showMail) {
-            MailComposer(
-                to: "zerone348@gmail.com",
-                subject: "GroomerBook Feedback",
-                body: feedbackText
-            )
-            .ignoresSafeArea()
-        }
-        // 健哥11-21令：无邮件账户的明确出口（正文已复制+邮箱地址可长按复制，去任意邮件App发）
-        .sheet(isPresented: $mailUnavailable) {
-            NavigationStack {
-                Form {
-                    Section {
-                        Text(L("No system Mail account on this phone, so the draft can't open here.", "本机没配系统邮件账户，草稿打不开。"))
-                            .font(.subheadline)
-                        Text(L("Your feedback has been copied. Send it from any mail app (QQ Mail / Gmail / Outlook) to:", "你的反馈文字已复制。请在任意邮件App（QQ邮箱/Gmail/Outlook）里粘贴发给："))
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                        Text("zerone348@gmail.com")
-                            .font(.body.bold())
-                            .textSelection(.enabled)
-                    } footer: {
-                        Text(L("Long-press the address above to copy it.", "长按上面地址可复制。"))
+        // 🔴健哥11-21令复查根修：两个 sheet(isPresented:) 挂同一 view 只有最后一个生效——
+        // 合并成单 sheet(item:)（MailFlow 两态），有账户/无账户都有明确反应
+        .sheet(item: $mailFlow) { flow in
+            switch flow {
+            case .composer:
+                MailComposer(
+                    to: "zerone348@gmail.com",
+                    subject: "GroomerBook Feedback",
+                    body: feedbackText
+                )
+                .ignoresSafeArea()
+            case .noAccount:
+                // 无邮件账户的明确出口（正文已复制+邮箱地址可长按复制，去任意邮件App发）
+                NavigationStack {
+                    Form {
+                        Section {
+                            Text(L("No system Mail account on this phone, so the draft can't open here.", "本机没配系统邮件账户，草稿打不开。"))
+                                .font(.subheadline)
+                            Text(L("Your feedback has been copied. Send it from any mail app (QQ Mail / Gmail / Outlook) to:", "你的反馈文字已复制。请在任意邮件App（QQ邮箱/Gmail/Outlook）里粘贴发给："))
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                            Text("zerone348@gmail.com")
+                                .font(.body.bold())
+                                .textSelection(.enabled)
+                        } footer: {
+                            Text(L("Long-press the address above to copy it.", "长按上面地址可复制。"))
+                        }
+                    }
+                    .navigationTitle(L("Email the Developer", "邮件发给开发者"))
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(L("Done", "完成")) { mailFlow = nil }
+                        }
                     }
                 }
-                .navigationTitle(L("Email the Developer", "邮件发给开发者"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(L("Done", "完成")) { mailUnavailable = false }
-                    }
-                }
+                .presentationDetents([.medium])
             }
-            .presentationDetents([.medium])
         }
         // 健哥11-20令②：收键盘——🔴11-21二次修正（返工）：
         // onTapGesture 吞 Button（一次修）→ simultaneousGesture 仍与 Form 滚动/按钮竞争（健哥再实锤）。
