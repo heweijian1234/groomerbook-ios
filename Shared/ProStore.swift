@@ -1,5 +1,6 @@
 import Foundation
 import StoreKit
+import UserNotifications   // 购买后撤掉"试用还剩2天"通知
 
 // MARK: - Pro 买断（十资产报告③：$14.99 买断墙——付费墙位置=「趋势→洞察」边界）
 // 原则（SOP S3 变现设计节）：免费层=基础记录+简单查看；Pro=数据资产导出（洞察/沉淀层）。
@@ -15,6 +16,7 @@ enum ProStore {
 
     static func markUnlocked() {
         UserDefaults.standard.set(true, forKey: "groomerbook.pro.unlocked")
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["groomerbook.trial.endsSoon"])
     }
 
     /// 购买（StoreKit 2）

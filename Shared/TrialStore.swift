@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications   // F：到期前2天本地通知（把悬崖变缓坡）
 
 // MARK: - 30天试用→买断 限时锁（2026-11-24 健哥拍板，决策日记第29条）
 // 模型：30天全功能免费试用 → $14.99买断。到期=只读+导出免费+锁新建（不做硬锁，防悬崖差评）。
@@ -16,8 +17,25 @@ enum TrialStore {
     /// 首启登记试用起点（升级用户=升级后首启起算）
     static func registerStartIfNeeded() {
         if UserDefaults.standard.object(forKey: startKey) == nil {
-            UserDefaults.standard.set(Date(), forKey: startKey)
+            let start = Date()
+            UserDefaults.standard.set(start, forKey: startKey)
+            scheduleEndsSoonReminder(from: start)
         }
+    }
+
+    /// F：到期前2天提醒（坏消息放事前；已购买会在markUnlocked里撤掉）
+    private static func scheduleEndsSoonReminder(from start: Date) {
+        guard let fire = Calendar.current.date(byAdding: .day, value: trialDays - 2, to: start) else { return }
+        let content = UNMutableNotificationContent()
+        content.title = L("Trial ends in 2 days", "试用还剩2天")
+        content.body = L("Your records stay readable & exportable free forever. Unlock once to keep booking.",
+                         "到期后记录仍可随便看、免费导出。解锁一次即可继续约单。")
+        content.sound = .default
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: fire)
+        let req = UNNotificationRequest(identifier: "groomerbook.trial.endsSoon",
+                                        content: content,
+                                        trigger: UNCalendarNotificationTrigger(dateMatching: comps, repeats: false))
+        UNUserNotificationCenter.current().add(req)
     }
 
     static var startDate: Date? {

@@ -56,6 +56,16 @@ struct OnboardingView: View {
                     : "今日页点 + 约单：选客户、宠物、时间、时长、最多3个闹钟。数据只在这台手机上——无账户无云端。",
                 tip: en ? "Trouble or ideas? Tell us from the Me tab." : "有问题或想法？「我的」页直接反馈给开发者。"
             ),
+            // 11-24试用制E：坏消息放事前——第一天就明示试用条款（客户不满是落差问题卡）
+            Step(
+                icon: "hourglass",
+                color: .orange,
+                title: en ? "5 · Your 30-day trial" : "5 · 30天试用说明",
+                body: en
+                    ? "Everything is free for 30 days. After that, your records stay readable and exportable — free forever. Unlock once ($29.99) to keep booking visits and adding clients & pets."
+                    : "30天内全功能免费。到期后：记录永远可看、可导出（免费）。解锁一次（$29.99）即可继续约单、加客户和宠物。",
+                tip: en ? "No subscription. Pay once, yours for life." : "无订阅。一次买断，终身拥有。"
+            ),
         ]
     }
 

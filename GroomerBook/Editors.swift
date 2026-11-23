@@ -895,10 +895,11 @@ struct FeedbackView: View {
                 Text(L("Sorry for any trouble! Please tell the developer what's not working — it will be fixed as soon as possible. New feature ideas are also very welcome, so the app can serve you better.\n\nFeedback goes straight to the developer by email. Nothing is stored in the app. To go back, just switch tabs at the bottom.",
                        "若有使用不便十分抱歉，请把具体问题反馈给开发者，会尽快修改。若有新功能想法，也可以告知，让开发者更好服务。\n\n反馈通过邮件直达开发者，不留任何数据在 App 里。返回请点底部标签切换。"))
             }
-            // 11-24试用制：状态行（试用倒计时/到期只读/已解锁；到期点它=弹付费墙）
+            // 11-24试用制：状态行（试用倒计时/到期只读/已解锁）
+            // A（审核死穴修）：试用期内也能点→弹付费墙提前解锁——苹果审核员必须能走到内购
             Section {
                 Button {
-                    if !TrialStore.canWrite {
+                    if !ProStore.unlocked {
                         NotificationCenter.default.post(name: TrialStore.showPaywallNotification, object: nil)
                     }
                 } label: {

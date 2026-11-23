@@ -880,12 +880,18 @@ struct ProPaywallView: View {
                 Image(systemName: "lock.open.circle.fill")
                     .font(.system(size: 56))
                     .foregroundColor(.orange)
-                Text(L("Your 30-day trial has ended", "30天试用已结束"))
+                // A：双态文案——试用中=提前解锁；到期=试用结束
+                Text(TrialStore.canWrite ? L("Unlock early — skip the wait", "提前解锁——不用等到期") : L("Your 30-day trial has ended", "30天试用已结束"))
                     .font(.title2.bold())
                 VStack(alignment: .leading, spacing: 10) {
-                    Label(L("Your records are safe — view & export anytime, free forever", "你的记录都在——随时查看、导出，永远免费"), systemImage: "checkmark.shield")
-                    Label(L("Unlock once to keep booking visits and adding clients & pets", "解锁一次，继续约单、加客户和宠物"), systemImage: "calendar.badge.plus")
-                    Label(L("One-time purchase, yours forever", "一次购买，终身拥有"), systemImage: "checkmark.seal")
+                    if TrialStore.canWrite {
+                        Label(L("Trial: \(TrialStore.daysLeft) days left. Unlock now — it's yours forever.", "试用还剩 \(TrialStore.daysLeft) 天。现在解锁，终身拥有。"), systemImage: "hourglass")
+                        Label(L("No subscription, no renewal — pay once", "无订阅无续费——一次付清"), systemImage: "checkmark.seal")
+                    } else {
+                        Label(L("Your records are safe — view & export anytime, free forever", "你的记录都在——随时查看、导出，永远免费"), systemImage: "checkmark.shield")
+                        Label(L("Unlock once to keep booking visits and adding clients & pets", "解锁一次，继续约单、加客户和宠物"), systemImage: "calendar.badge.plus")
+                        Label(L("One-time purchase, yours forever", "一次购买，终身拥有"), systemImage: "checkmark.seal")
+                    }
                 }
                 .font(.subheadline)
                 .padding(.horizontal, 24)
