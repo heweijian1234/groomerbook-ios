@@ -482,6 +482,7 @@ struct ClientListView: View {
     @State private var showAdd = false
     // 健哥11-21令①：总导出直传文本（Identifiable 包装——sheet(item:) 用）
     @State private var shareText: ShareTextItem?
+    @State private var showProPaywall = false   // 十资产③：Pro付费墙
 
     struct ShareTextItem: Identifiable {
         let id = UUID()
@@ -537,11 +538,14 @@ struct ClientListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        // 健哥11-21令①：总导出空内容根修——不再走 exportText State 中转
-                        // （sheet 内容闭包同帧读旧值 nil → 导出空字符串），直接 item 直传
-                        shareText = ShareTextItem(text: Exporter.makeText(data: data))
+                        // 十资产报告③付费墙：数据资产导出=Pro（趋势→洞察边界；免费层=基础记录+查看）
+                        if ProStore.unlocked {
+                            shareText = ShareTextItem(text: Exporter.makeText(data: data))
+                        } else {
+                            showProPaywall = true
+                        }
                     } label: {
-                        Image(systemName: "square.and.arrow.up")
+                        Image(systemName: ProStore.unlocked ? "square.and.arrow.up" : "lock")
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -554,6 +558,10 @@ struct ClientListView: View {
             // 健哥11-21令①：sheet(item:) 模式——文本即 item，构造时确定，永不为空
             .sheet(item: $shareText) { item in
                 ShareSheet(items: [item.text])
+            }
+            // 十资产报告③：Pro付费墙（$14.99买断——数据资产导出）
+            .sheet(isPresented: $showProPaywall) {
+                ProPaywallView()
             }
         }
     }
@@ -831,4 +839,69 @@ struct ShareSheet: UIViewControllerRepresentable {
         UIActivityViewController(activityItems: items, applicationActivities: nil)
     }
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
+}
+
+
+// MARK: - Pro 付费墙（十资产报告③：$14.99 买断——免费=基础记录查看，Pro=数据资产导出）
+struct ProPaywallView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var purchasing = false
+    @State private var failed = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(spacing: 20) {
+                Image(systemName: "lock.open.circle.fill")
+                    .font(.system(size: 56))
+                    .foregroundColor(.orange)
+                Text(L("GroomerBook Pro", "GroomerBook Pro"))
+                    .font(.title2.bold())
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(L("Export your full client & visit history as text", "导出全部客户与上门记录"), systemImage: "square.and.arrow.up")
+                    Label(L("Back up years of records — change phones without losing data", "多年记录备份——换机不丢数据"), systemImage: "externaldrive")
+                    Label(L("One-time purchase, yours forever", "一次购买，终身拥有"), systemImage: "checkmark.seal")
+                }
+                .font(.subheadline)
+                .padding(.horizontal, 24)
+                Button {
+                    purchasing = true
+                    Task {
+                        let ok = await ProStore.purchase()
+                        purchasing = false
+                        if ok { dismiss() } else { failed = true }
+                    }
+                } label: {
+                    Label(purchasing ? L("Processing…", "处理中…") : L("Unlock — $14.99 once", "解锁 — $14.99 一次性"), systemImage: "crown")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(.orange)
+                        .foregroundStyle(.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                }
+                .disabled(purchasing)
+                .padding(.horizontal, 24)
+                if failed {
+                    Text(L("Purchase didn't complete. If you already bought it, tap Restore.", "购买未完成。如已买过，点恢复购买。"))
+                        .font(.caption).foregroundColor(.red)
+                }
+                Button(L("Restore purchase", "恢复购买")) {
+                    Task {
+                        await ProStore.restore()
+                        if ProStore.unlocked { dismiss() }
+                    }
+                }
+                .font(.subheadline)
+                Spacer()
+            }
+            .padding(.top, 40)
+            .navigationTitle(L("Pro", "Pro"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L("Not now", "暂不")) { dismiss() }
+                }
+            }
+        }
+    }
 }

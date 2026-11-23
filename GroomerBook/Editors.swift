@@ -891,6 +891,18 @@ struct FeedbackView: View {
                 Text(L("Sorry for any trouble! Please tell the developer what's not working — it will be fixed as soon as possible. New feature ideas are also very welcome, so the app can serve you better.\n\nFeedback goes straight to the developer by email. Nothing is stored in the app. To go back, just switch tabs at the bottom.",
                        "若有使用不便十分抱歉，请把具体问题反馈给开发者，会尽快修改。若有新功能想法，也可以告知，让开发者更好服务。\n\n反馈通过邮件直达开发者，不留任何数据在 App 里。返回请点底部标签切换。"))
             }
+            // 十资产报告③：Pro状态行
+            Section {
+                HStack {
+                    Label(L("GroomerBook Pro", "GroomerBook Pro"), systemImage: ProStore.unlocked ? "crown.fill" : "lock")
+                        .foregroundColor(.orange)
+                    Spacer()
+                    Text(ProStore.unlocked ? L("Unlocked", "已解锁") : L("Locked", "未解锁"))
+                        .font(.caption).foregroundColor(.secondary)
+                }
+            } header: {
+                Text(L("Pro", "Pro"))
+            }
             // 健哥 11-19 令：新手引导重看入口
             Section {
                 Button {
