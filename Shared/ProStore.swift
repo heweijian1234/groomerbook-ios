@@ -38,9 +38,10 @@ enum ProStore {
     }
 
     /// 启动时恢复购买（换机/重装场景）
+    /// 🔴currentEntitlements元素=VerificationResult<Transaction>，必须解包再取productID（CI两轮红根因）
     static func restore() async {
-        for await entitlement in Transaction.currentEntitlements {
-            if entitlement.productID == productID {
+        for await result in Transaction.currentEntitlements {
+            if case .verified(let transaction) = result, transaction.productID == productID {
                 markUnlocked()
                 return
             }
