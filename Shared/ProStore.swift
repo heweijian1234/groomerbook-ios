@@ -39,8 +39,11 @@ enum ProStore {
 
     /// 启动时恢复购买（换机/重装场景）
     static func restore() async {
-        guard let transactions = Transaction.currentEntitlements.transactions.first(where: { $0.productID == productID }) else { return }
-        _ = transactions
-        markUnlocked()
+        for await entitlement in Transaction.currentEntitlements {
+            if entitlement.productID == productID {
+                markUnlocked()
+                return
+            }
+        }
     }
 }
