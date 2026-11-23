@@ -897,7 +897,7 @@ struct ProPaywallView: View {
                         if ok { dismiss() } else { failed = true }
                     }
                 } label: {
-                    Label(purchasing ? L("Processing…", "处理中…") : L("Unlock — $14.99 once", "解锁 — $14.99 一次性"), systemImage: "crown")
+                    Label(purchasing ? L("Processing…", "处理中…") : L("Unlock — $29.99 once", "解锁 — $29.99 一次性"), systemImage: "crown")
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
