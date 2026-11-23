@@ -830,6 +830,10 @@ struct FeedbackView: View {
     /// 返回键回调（健哥 11-21 令②：右上角返回——Tab 根页用切 Tab 实现"返回"）
     var onBack: (() -> Void)? = nil
     @State private var feedbackText = ""
+    // 11-24试用制测试钩子：版本行连点5下唤出调试区（TestFlight可测到期/解锁状态）
+    @State private var versionTaps = 0
+    @State private var showTrialDebug = false
+    @State private var debugTick = 0   // 覆盖切换后强制刷新显示
     // 🔴健哥11-21令复查破案：同 view 挂两个 sheet(isPresented:) 只有最后一个生效（SwiftUI 已知限制）
     // ——showMail 的 sheet 被 mailUnavailable 的 sheet 覆盖注册，有系统邮件账户时点按钮没反应。
     // 根修：合并成一个 sheet(item:)（枚举两态），永不冲突。
@@ -891,17 +895,28 @@ struct FeedbackView: View {
                 Text(L("Sorry for any trouble! Please tell the developer what's not working — it will be fixed as soon as possible. New feature ideas are also very welcome, so the app can serve you better.\n\nFeedback goes straight to the developer by email. Nothing is stored in the app. To go back, just switch tabs at the bottom.",
                        "若有使用不便十分抱歉，请把具体问题反馈给开发者，会尽快修改。若有新功能想法，也可以告知，让开发者更好服务。\n\n反馈通过邮件直达开发者，不留任何数据在 App 里。返回请点底部标签切换。"))
             }
-            // 十资产报告③：Pro状态行
+            // 11-24试用制：状态行（试用倒计时/到期只读/已解锁；到期点它=弹付费墙）
             Section {
-                HStack {
-                    Label(L("GroomerBook Pro", "GroomerBook Pro"), systemImage: ProStore.unlocked ? "crown.fill" : "lock")
-                        .foregroundColor(.orange)
-                    Spacer()
-                    Text(ProStore.unlocked ? L("Unlocked", "已解锁") : L("Locked", "未解锁"))
-                        .font(.caption).foregroundColor(.secondary)
+                Button {
+                    if !TrialStore.canWrite {
+                        NotificationCenter.default.post(name: TrialStore.showPaywallNotification, object: nil)
+                    }
+                } label: {
+                    HStack {
+                        Label(L("GroomerBook Pro", "GroomerBook Pro"),
+                              systemImage: (ProStore.unlocked || TrialStore.debugOverride == "unlocked") ? "crown.fill" : (TrialStore.canWrite ? "hourglass" : "lock"))
+                            .foregroundColor(.orange)
+                        Spacer()
+                        Text(TrialStore.statusText)
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
             } header: {
                 Text(L("Pro", "Pro"))
+            } footer: {
+                Text(L("30-day full-feature trial. After it ends: records stay readable & exportable free forever; unlock once to keep adding.",
+                       "30天全功能试用。到期后：记录永远可看可导出（免费）；解锁一次即可继续新增。"))
+                    .font(.caption2)
             }
             // 健哥 11-19 令：新手引导重看入口
             Section {
@@ -914,6 +929,33 @@ struct FeedbackView: View {
                 Text(L("Help", "帮助"))
             } footer: {
                 Text(L("New here? A 4-step quick tour of Today, Clients, Pets and booking.", "第一次用？4步快速过一遍今日/客户/宠物/约单。"))
+            }
+            // 11-24测试钩子：版本行连点5下唤出试用状态调试（健哥TestFlight实测用，普通用户无感）
+            Section {
+                Button {
+                    versionTaps += 1
+                    if versionTaps >= 5 { showTrialDebug.toggle(); versionTaps = 0 }
+                } label: {
+                    HStack {
+                        Text(L("Version", "版本")).font(.caption).foregroundColor(.secondary)
+                        Spacer()
+                        Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "?")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
+                }
+                if showTrialDebug {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("调试：试用状态覆盖（仅测试用，切换后切个Tab刷新横幅）").font(.caption.bold())
+                        Text("起点：\(TrialStore.startDate.map { "\($0)" } ?? "未登记")｜剩 \(TrialStore.daysLeft) 天｜覆盖：\(TrialStore.debugOverride ?? "无")")
+                            .font(.caption2).foregroundColor(.secondary)
+                        Button("重置为全新试用（30天）") { TrialStore.setDebugOverride("fresh"); debugTick += 1 }
+                        Button("强制到期（只读+导出免费）") { TrialStore.setDebugOverride("expired"); debugTick += 1 }
+                        Button("强制已解锁") { TrialStore.setDebugOverride("unlocked"); debugTick += 1 }
+                        Button("清除覆盖（恢复真实状态）") { TrialStore.setDebugOverride(nil); debugTick += 1 }
+                    }
+                    .font(.caption)
+                    .id(debugTick)   // 覆盖切换→整个body重算→状态行同步刷新
+                }
             }
         }
         // 🔴健哥11-21令复查根修：两个 sheet(isPresented:) 挂同一 view 只有最后一个生效——

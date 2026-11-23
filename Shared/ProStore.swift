@@ -25,7 +25,8 @@ enum ProStore {
         guard let result = try? await product.purchase() else { return false }
         switch result {
         case .success(let verification):
-            if case .verified = verification {
+            if case .verified(let transaction) = verification {
+                transaction.finish()   // 11-24补：苹果要求完成交易，不然重复投递（挂账清偿）
                 markUnlocked()
                 return true
             }

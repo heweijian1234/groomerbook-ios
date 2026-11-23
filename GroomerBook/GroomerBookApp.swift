@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine   // 11-24试用制：NotificationCenter.publisher（全局付费墙通知）
 import UserNotifications
 
 @main
@@ -66,27 +67,55 @@ struct RootView: View {
     // 健哥 11-20 令①：只对真·首次安装弹——老设备（装过任意版本）升级后不再轰炸；
     // 引导没走完的老用户也不再每次进都弹（想看=Me页"重看新手引导"）
     @State private var showOnboarding = !Onboarding.isDone && !UserDefaults.standard.bool(forKey: "groomerbook.everLaunched")
+    // 11-24试用制：全局付费墙（各写入口 TrialStore.gate() 拦截后发通知，这里统一弹）
+    @State private var showProPaywall = false
 
     var body: some View {
-        TabView(selection: $tab) {
-            TodayView(data: $data)
-                .tabItem { Label(L("Today", "今日"), systemImage: "calendar") }
-                .tag(0)
-            ClientListView(data: $data)
-                .tabItem { Label(L("Clients", "客户"), systemImage: "person.2") }
-                .tag(1)
-            FeedbackView(replayOnboarding: {
-                showOnboarding = true
-            }, onBack: {
-                tab = 0   // 健哥11-21令②：右上角返回=切回今日页
-            })
-                .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
-                .tag(2)
+        VStack(spacing: 0) {
+            // 11-24试用制：到期只读横幅（坏消息放事前——记录还在、导出免费、解锁继续记）
+            if !TrialStore.canWrite {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.fill")
+                    Text(L("Trial ended — records are read-only. Export stays free.", "试用已结束——记录只读，导出仍免费。"))
+                        .font(.caption)
+                    Spacer()
+                    Button(L("Unlock", "解锁")) {
+                        NotificationCenter.default.post(name: TrialStore.showPaywallNotification, object: nil)
+                    }
+                    .font(.caption.bold())
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12).padding(.vertical, 8)
+                .background(.orange)
+            }
+            TabView(selection: $tab) {
+                TodayView(data: $data)
+                    .tabItem { Label(L("Today", "今日"), systemImage: "calendar") }
+                    .tag(0)
+                ClientListView(data: $data)
+                    .tabItem { Label(L("Clients", "客户"), systemImage: "person.2") }
+                    .tag(1)
+                FeedbackView(replayOnboarding: {
+                    showOnboarding = true
+                }, onBack: {
+                    tab = 0   // 健哥11-21令②：右上角返回=切回今日页
+                })
+                    .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
+                    .tag(2)
+            }
         }
         .onAppear {
             data = Store.load()
             // 健哥11-20令①：启动即记"装过"——下次进（含升级后）不再自动弹引导
             UserDefaults.standard.set(true, forKey: "groomerbook.everLaunched")
+            TrialStore.registerStartIfNeeded()   // 11-24试用制：首启登记试用起点
+            Task { await ProStore.restore() }    // 启动恢复购买（换机/重装场景）
+        }
+        .onReceive(NotificationCenter.default.publisher(for: TrialStore.showPaywallNotification)) { _ in
+            showProPaywall = true
+        }
+        .sheet(isPresented: $showProPaywall) {
+            ProPaywallView()
         }
         .fullScreenCover(isPresented: $showOnboarding, onDismiss: { Onboarding.markDone() }) {
             OnboardingView(onFinish: {
@@ -167,13 +196,14 @@ struct TodayView: View {
                                 ForEach(appts) { appt in
                                     // 健哥令第五轮①：左滑删除 + 点行进编辑（在路上短信已删，换成编辑）
                                     Button {
-                                        editingAppt = appt
+                                        if TrialStore.gate() { editingAppt = appt }   // 11-24试用制：到期锁编辑
                                     } label: {
                                         AppointmentRow(appt: appt, data: $data)
                                     }
                                     .buttonStyle(.plain)
                                 }
                                 .onDelete { offsets in
+                                    guard TrialStore.gate() else { return }   // 11-24试用制：到期锁删除
                                     for i in offsets {
                                         ReminderScheduler.cancel(appointmentId: appts[i].id)
                                         data.appointments.removeAll { $0.id == appts[i].id }
@@ -193,7 +223,7 @@ struct TodayView: View {
             .navigationTitle(L("Today", "今日"))
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
+                    Button { if TrialStore.gate() { showAdd = true } } label: { Image(systemName: "plus") }   // 11-24试用制：到期锁新建
                 }
             }
             .sheet(isPresented: $showAdd, onDismiss: { data = Store.load() }) {
@@ -317,7 +347,7 @@ struct TodayVisitCard: View {
             HStack {
                 Spacer()
                 Button {
-                    editingAppt = appt
+                    if TrialStore.gate() { editingAppt = appt }   // 11-24试用制：到期锁编辑
                 } label: {
                     Label(L("Edit", "编辑此单"), systemImage: "pencil")
                         .font(.caption)
@@ -457,6 +487,7 @@ struct AppointmentRow: View {
     }
 
     private func update(_ st: Appointment.Status) {
+        guard TrialStore.gate() else { return }   // 11-24试用制：到期锁完成/没来
         if let i = data.appointments.firstIndex(where: { $0.id == appt.id }) {
             data.appointments[i].status = st
             if st == .noshow {
@@ -482,7 +513,6 @@ struct ClientListView: View {
     @State private var showAdd = false
     // 健哥11-21令①：总导出直传文本（Identifiable 包装——sheet(item:) 用）
     @State private var shareText: ShareTextItem?
-    @State private var showProPaywall = false   // 十资产③：Pro付费墙
 
     struct ShareTextItem: Identifiable {
         let id = UUID()
@@ -530,7 +560,10 @@ struct ClientListView: View {
                                 }
                             }
                         }
-                        .onDelete { data.owners.remove(atOffsets: $0); Store.save(data) }
+                        .onDelete { offsets in
+                            guard TrialStore.gate() else { return }   // 11-24试用制：到期锁删除
+                            data.owners.remove(atOffsets: offsets); Store.save(data)
+                        }
                     }
                 }
             }
@@ -538,18 +571,14 @@ struct ClientListView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        // 十资产报告③付费墙：数据资产导出=Pro（趋势→洞察边界；免费层=基础记录+查看）
-                        if ProStore.unlocked {
-                            shareText = ShareTextItem(text: Exporter.makeText(data: data))
-                        } else {
-                            showProPaywall = true
-                        }
+                        // 11-24健哥拍板：导出永远免费（到期只读策略的一部分——数据永远不是人质）
+                        shareText = ShareTextItem(text: Exporter.makeText(data: data))
                     } label: {
-                        Image(systemName: ProStore.unlocked ? "square.and.arrow.up" : "lock")
+                        Image(systemName: "square.and.arrow.up")
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
+                    Button { if TrialStore.gate() { showAdd = true } } label: { Image(systemName: "plus") }   // 11-24试用制：到期锁新建
                 }
             }
             .sheet(isPresented: $showAdd, onDismiss: { data = Store.load() }) {
@@ -558,10 +587,6 @@ struct ClientListView: View {
             // 健哥11-21令①：sheet(item:) 模式——文本即 item，构造时确定，永不为空
             .sheet(item: $shareText) { item in
                 ShareSheet(items: [item.text])
-            }
-            // 十资产报告③：Pro付费墙（$14.99买断——数据资产导出）
-            .sheet(isPresented: $showProPaywall) {
-                ProPaywallView()
             }
         }
     }
@@ -666,8 +691,8 @@ struct ClientDetailView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    Button { showEdit = true } label: { Label(L("Edit Client", "编辑客户"), systemImage: "pencil") }
-                    Button { showAddPet = true } label: { Label(L("Add Pet", "加宠物"), systemImage: "plus.circle") }
+                    Button { if TrialStore.gate() { showEdit = true } } label: { Label(L("Edit Client", "编辑客户"), systemImage: "pencil") }   // 11-24试用制
+                    Button { if TrialStore.gate() { showAddPet = true } } label: { Label(L("Add Pet", "加宠物"), systemImage: "plus.circle") }   // 11-24试用制
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
@@ -822,7 +847,7 @@ struct PetDetailView: View {
         .navigationTitle(current.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showEdit = true } label: { Image(systemName: "pencil") }
+                Button { if TrialStore.gate() { showEdit = true } } label: { Image(systemName: "pencil") }   // 11-24试用制：到期锁编辑
             }
         }
         .sheet(isPresented: $showEdit, onDismiss: { data = Store.load() }) {
@@ -842,7 +867,8 @@ struct ShareSheet: UIViewControllerRepresentable {
 }
 
 
-// MARK: - Pro 付费墙（十资产报告③：$14.99 买断——免费=基础记录查看，Pro=数据资产导出）
+// MARK: - 付费墙（11-24健哥拍板：30天试用→$14.99买断限时锁；到期只读+导出免费+锁新建）
+// 文案原则（客户不满是落差问题卡）：先说"记录安全、导出永远免费"，再说"解锁继续记"——坏消息放事前。
 struct ProPaywallView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var purchasing = false
@@ -854,11 +880,11 @@ struct ProPaywallView: View {
                 Image(systemName: "lock.open.circle.fill")
                     .font(.system(size: 56))
                     .foregroundColor(.orange)
-                Text(L("GroomerBook Pro", "GroomerBook Pro"))
+                Text(L("Your 30-day trial has ended", "30天试用已结束"))
                     .font(.title2.bold())
                 VStack(alignment: .leading, spacing: 10) {
-                    Label(L("Export your full client & visit history as text", "导出全部客户与上门记录"), systemImage: "square.and.arrow.up")
-                    Label(L("Back up years of records — change phones without losing data", "多年记录备份——换机不丢数据"), systemImage: "externaldrive")
+                    Label(L("Your records are safe — view & export anytime, free forever", "你的记录都在——随时查看、导出，永远免费"), systemImage: "checkmark.shield")
+                    Label(L("Unlock once to keep booking visits and adding clients & pets", "解锁一次，继续约单、加客户和宠物"), systemImage: "calendar.badge.plus")
                     Label(L("One-time purchase, yours forever", "一次购买，终身拥有"), systemImage: "checkmark.seal")
                 }
                 .font(.subheadline)
