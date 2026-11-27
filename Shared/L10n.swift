@@ -1,13 +1,18 @@
 import Foundation
 
-// MARK: - 双语切换（2026-11-08 上架令：英文上架版；中文测试版历史保留——切换此枚举即回中文）
-// 机制：全部 UI 字符串经 L() 取值；上架=en。之后若做本地化多语言，换 Locale 判断即可。
+// MARK: - 双语切换（2026-11-27 健哥令：跟随系统语言——中文系统=中文，其他=英文上架版）
+// 机制与 NotaryTrack/UricNote 同源（11-24 SOP：新 App 一律做此机制，全英文健哥没法实测）：
+// 全部 UI 字符串经 L() 取值；只上一份包，系统首选语言含 zh 即中文。
 
 enum AppLang {
     case en
     case zh
 
-    static let current: AppLang = .en   // 🔴上架版=英文（健哥 2026-11-08 令）。中文测试版改回 .zh
+    static let current: AppLang = {
+        // 系统首选语言含 zh（简/繁/中国区）即中文
+        let preferred = Locale.preferredLanguages.first ?? "en"
+        return preferred.hasPrefix("zh") ? .zh : .en
+    }()
 }
 
 func L(_ en: String, _ zh: String) -> String {

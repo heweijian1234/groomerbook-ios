@@ -24,6 +24,10 @@ targets:
         CFBundleDisplayName: GroomerBook
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleLocalizations:
+          - en
+          - zh-Hans
+        CFBundleDevelopmentRegion: en
         UILaunchScreen:
           UIColorName: ""
         UISupportedInterfaceOrientations:

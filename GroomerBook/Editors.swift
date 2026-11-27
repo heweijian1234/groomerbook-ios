@@ -343,6 +343,16 @@ struct PetLinkPicker: View {
                             }
                         }
                     }
+                    // 2026-11-27 健哥令：删客户后留下的无主宠物显示可以，但必须能删（左滑删除）
+                    .onDelete { offsets in
+                        // 先捕获再删（unowned 是计算属性，边删边按索引取会错位）
+                        let doomed = offsets.map { unowned[$0] }
+                        for pet in doomed {
+                            data.pets.removeAll { $0.id == pet.id }
+                            selectedUnownedIds.remove(pet.id)   // 已勾认领的同步取消
+                        }
+                        Store.save(data)
+                    }
                 } header: {
                     Text(L("Unregistered owner — link one", "无主宠物——可认领"))
                 } footer: {
@@ -415,6 +425,15 @@ struct PetEditor: View {
                                     }
                                 }
                             }
+                        }
+                        // 2026-11-27 健哥令：无主宠物同款左滑删除（与 PetLinkPicker 一致）
+                        .onDelete { offsets in
+                            let doomed = offsets.map { unownedPets[$0] }
+                            for pet in doomed {
+                                data.pets.removeAll { $0.id == pet.id }
+                                if claimUnownedId == pet.id { claimUnownedId = nil }
+                            }
+                            Store.save(data)
                         }
                     } header: {
                         Text(L("Link a registered pet (no owner)", "认领已登记的无主宠物"))
