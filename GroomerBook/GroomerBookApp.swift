@@ -691,8 +691,17 @@ struct ClientDetailView: View {
             }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
-                    Button { if TrialStore.gate() { showEdit = true } } label: { Label(L("Edit Client", "编辑客户"), systemImage: "pencil") }   // 11-24试用制
-                    Button { if TrialStore.gate() { showAddPet = true } } label: { Label(L("Add Pet", "加宠物"), systemImage: "plus.circle") }   // 11-24试用制
+                    // 🔴iOS 26 系统bug：Menu按钮直接弹sheet会被菜单模态挡住——延迟一拍再赋值（N仓11-27实锤同款修法）
+                    Button {
+                        if TrialStore.gate() {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showEdit = true }
+                        }
+                    } label: { Label(L("Edit Client", "编辑客户"), systemImage: "pencil") }
+                    Button {
+                        if TrialStore.gate() {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { showAddPet = true }
+                        }
+                    } label: { Label(L("Add Pet", "加宠物"), systemImage: "plus.circle") }
                 } label: { Image(systemName: "ellipsis.circle") }
             }
         }
