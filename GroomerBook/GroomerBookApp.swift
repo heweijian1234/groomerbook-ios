@@ -88,21 +88,26 @@ struct RootView: View {
                 .padding(.horizontal, 12).padding(.vertical, 8)
                 .background(.orange)
             }
+            // 🔴S7.9 标配（2026-11-28 健哥令）：左右滑切换页面——.page 翻页样式+自绘底部导航条（NotaryTrack f88d42d 范本）
             TabView(selection: $tab) {
-                TodayView(data: $data)
-                    .tabItem { Label(L("Today", "今日"), systemImage: "calendar") }
-                    .tag(0)
-                ClientListView(data: $data)
-                    .tabItem { Label(L("Clients", "客户"), systemImage: "person.2") }
-                    .tag(1)
+                TodayView(data: $data).tag(0)
+                ClientListView(data: $data).tag(1)
                 FeedbackView(replayOnboarding: {
                     showOnboarding = true
                 }, onBack: {
                     tab = 0   // 健哥11-21令②：右上角返回=切回今日页
-                })
-                    .tabItem { Label(L("Me", "我的"), systemImage: "person.crop.circle") }
-                    .tag(2)
+                }).tag(2)
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            HStack(spacing: 0) {
+                tabBarButton(icon: "calendar", label: L("Today", "今日"), idx: 0)
+                tabBarButton(icon: "person.2", label: L("Clients", "客户"), idx: 1)
+                tabBarButton(icon: "person.crop.circle", label: L("Me", "我的"), idx: 2)
+            }
+            .padding(.top, 6)
+            .padding(.bottom, 2)
+            .background(.bar)
         }
         .onAppear {
             data = Store.load()
@@ -122,6 +127,20 @@ struct RootView: View {
                 Onboarding.markDone()
                 showOnboarding = false
             })
+        }
+    }
+
+    /// 🔴S7.9 标配：自绘底部导航按钮（滑动切页配对件）
+    private func tabBarButton(icon: String, label: String, idx: Int) -> some View {
+        Button {
+            withAnimation { tab = idx }
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: icon).font(.system(size: 20))
+                Text(label).font(.caption2)
+            }
+            .frame(maxWidth: .infinity)
+            .foregroundColor(tab == idx ? .orange : .secondary)
         }
     }
 }
